@@ -28,7 +28,7 @@ type BackupData struct {
 	Version   string           `json:"version"`
 	CreatedAt time.Time        `json:"created_at"`
 	Emby      []models.Emby    `json:"emby"`
-	Codes     []models.Rcode   `json:"codes"`
+	Codes     []models.Code   `json:"codes"`
 	Envelopes []models.RedEnvelope `json:"red_envelopes"`
 }
 
@@ -45,7 +45,7 @@ type BackupResult struct {
 // NewBackupService 创建备份服务
 func NewBackupService() *BackupService {
 	cfg := config.Get()
-	backupDir := cfg.BackupDir
+	backupDir := cfg.Database.BackupDir
 	if backupDir == "" {
 		backupDir = "./backups"
 	}

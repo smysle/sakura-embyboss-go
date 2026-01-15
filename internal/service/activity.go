@@ -88,7 +88,7 @@ func (s *ActivityService) CheckLowActivity() (*ActivityResult, error) {
 		// 处理已禁用用户（等级 c）
 		if embyUser.Lv == models.LevelC {
 			// 检查是否需要删除
-			if err := s.handleDisabledUser(embyUser, user, &result); err != nil {
+			if err := s.handleDisabledUser(embyUser, user, result); err != nil {
 				logger.Warn().Err(err).Int64("tg", embyUser.TG).Msg("处理禁用用户失败")
 			}
 			continue
