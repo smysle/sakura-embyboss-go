@@ -442,7 +442,7 @@ func (c *Client) executeAuditSQL(sql string) ([]AuditResult, error) {
 		// 获取用户名（带缓存）
 		username := userCache[userID]
 		if username == "" {
-			if user, err := c.GetUserByID(userID); err == nil {
+			if user, err := c.GetUser(userID); err == nil {
 				username = user.Name
 			} else {
 				username = "未知用户"
