@@ -140,7 +140,7 @@ func (s *Scheduler) checkExpired() {
 	}
 
 	// 向 Owner 发送报告
-	if s.bot != nil && s.cfg.OwnerID != 0 && result.Expired > 0 {
+	if s.bot != nil && s.cfg.Owner != 0 && result.Expired > 0 {
 		report := fmt.Sprintf(
 			"📊 **到期检测报告**\n\n"+
 				"检测用户: %d\n"+
@@ -152,7 +152,7 @@ func (s *Scheduler) checkExpired() {
 			result.Disabled,
 			result.Failed,
 		)
-		chat := &tele.Chat{ID: s.cfg.OwnerID}
+		chat := &tele.Chat{ID: s.cfg.Owner}
 		s.bot.Send(chat, report, tele.ModeMarkdown)
 	}
 }
@@ -167,7 +167,10 @@ func (s *Scheduler) generateDayRanks() {
 	}
 
 	// 获取推送群组
-	chatID := s.cfg.GroupID
+	var chatID int64
+	if len(s.cfg.Groups) > 0 {
+		chatID = s.cfg.Groups[0]
+	}
 	if chatID == 0 {
 		logger.Warn().Msg("未配置群组 ID，跳过日榜推送")
 		return
@@ -192,7 +195,10 @@ func (s *Scheduler) generateWeekRanks() {
 	}
 
 	// 获取推送群组
-	chatID := s.cfg.GroupID
+	var chatID int64
+	if len(s.cfg.Groups) > 0 {
+		chatID = s.cfg.Groups[0]
+	}
 	if chatID == 0 {
 		logger.Warn().Msg("未配置群组 ID，跳过周榜推送")
 		return
@@ -228,8 +234,8 @@ func (s *Scheduler) checkLowActivity() {
 		Msg("活跃度检测完成")
 
 	// 向 Owner 发送报告
-	if s.bot != nil && s.cfg.OwnerID != 0 && (result.Inactive > 0 || result.Deleted > 0) {
-		chat := &tele.Chat{ID: s.cfg.OwnerID}
+	if s.bot != nil && s.cfg.Owner != 0 && (result.Inactive > 0 || result.Deleted > 0) {
+		chat := &tele.Chat{ID: s.cfg.Owner}
 		s.bot.Send(chat, result.FormatResult(), tele.ModeMarkdown)
 	}
 }
