@@ -58,14 +58,44 @@ func Init(cfg *config.DatabaseConfig) error {
 
 // autoMigrate 自动迁移表结构
 func autoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	// 核心表 - 必须迁移
+	coreTables := []interface{}{
 		&models.Emby{},
 		&models.Code{},
-		&models.Favorites{},
-		&models.RequestRecord{},
 		&models.RedEnvelope{},
 		&models.RedEnvelopeRecord{},
-	)
+	}
+
+	if err := db.AutoMigrate(coreTables...); err != nil {
+		return err
+	}
+
+	// 可选表 - 如果已存在则跳过，不存在则创建
+	optionalTables := []interface{}{
+		&models.Favorites{},
+		&models.RequestRecord{},
+	}
+
+	for _, table := range optionalTables {
+		tableName := ""
+		switch table.(type) {
+		case *models.Favorites:
+			tableName = "favorites"
+		case *models.RequestRecord:
+			tableName = "request_records"
+		}
+
+		// 检查表是否已存在
+		if !db.Migrator().HasTable(tableName) {
+			if err := db.AutoMigrate(table); err != nil {
+				logger.Warn().Str("table", tableName).Err(err).Msg("可选表迁移失败，跳过")
+			}
+		} else {
+			logger.Debug().Str("table", tableName).Msg("表已存在，跳过迁移")
+		}
+	}
+
+	return nil
 }
 
 // Close 关闭数据库连接
