@@ -22,9 +22,28 @@ import (
 func OnCallback(c tele.Context) error {
 	data := c.Callback().Data
 
-	// 解析回调数据
-	parts := strings.Split(data, ":")
-	action := parts[0]
+	// telebot v3 的 Data() 生成的回调格式是 "\f{unique}|{data}"
+	// 需要去掉 \f 前缀
+	if len(data) > 0 && data[0] == '\f' {
+		data = data[1:]
+	}
+
+	// 解析回调数据，格式可能是 "action|param" 或 "action:param"
+	var action string
+	var parts []string
+
+	if strings.Contains(data, "|") {
+		parts = strings.Split(data, "|")
+		action = parts[0]
+	} else if strings.Contains(data, ":") {
+		parts = strings.Split(data, ":")
+		action = parts[0]
+	} else {
+		action = data
+		parts = []string{data}
+	}
+
+	logger.Debug().Str("raw_data", c.Callback().Data).Str("action", action).Msg("收到回调")
 
 	switch action {
 	case "back_start":
@@ -55,6 +74,28 @@ func OnCallback(c tele.Context) error {
 			return HandleGrabRedEnvelope(c, parts[1])
 		}
 		return c.Respond(&tele.CallbackResponse{Text: "无效的红包"})
+	case "my_plays":
+		return handleMyPlays(c)
+	case "my_favorites":
+		return handleMyFavorites(c)
+	case "admin_users":
+		return handleAdminUsers(c)
+	case "admin_codes":
+		return handleAdminCodes(c)
+	case "admin_stats":
+		return handleAdminStats(c)
+	case "admin_check_ex":
+		return handleAdminCheckEx(c)
+	case "admin_day_ranks":
+		return handleAdminDayRanks(c)
+	case "admin_week_ranks":
+		return handleAdminWeekRanks(c)
+	case "owner_config":
+		return handleOwnerConfig(c)
+	case "owner_backup":
+		return handleOwnerBackup(c)
+	case "devices":
+		return handleDevices(c)
 	case "noop":
 		return c.Respond()
 	default:
@@ -373,4 +414,138 @@ func OnInlineQuery(c tele.Context) error {
 		Results:   []tele.Result{},
 		CacheTime: 60,
 	})
+}
+
+// handleMyPlays 我的观影
+func handleMyPlays(c tele.Context) error {
+	c.Respond(&tele.CallbackResponse{Text: "📈 获取观影记录..."})
+	return c.Edit("📈 **我的观影**\n\n🚧 功能开发中...", keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
+}
+
+// handleMyFavorites 我的收藏
+func handleMyFavorites(c tele.Context) error {
+	c.Respond(&tele.CallbackResponse{Text: "⭐ 获取收藏..."})
+	return c.Edit("⭐ **我的收藏**\n\n🚧 功能开发中...", keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
+}
+
+// handleAdminUsers 用户管理
+func handleAdminUsers(c tele.Context) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "👥 用户管理"})
+	
+	repo := repository.NewEmbyRepository()
+	total, withEmby, whitelist, _ := repo.GetStats()
+	
+	text := fmt.Sprintf(
+		"👥 **用户管理**\n\n"+
+			"📊 统计:\n"+
+			"• 总用户: %d\n"+
+			"• 有账户: %d\n"+
+			"• 白名单: %d\n\n"+
+			"使用命令管理用户:\n"+
+			"• `/kk @用户` - 查看/管理用户\n"+
+			"• `/prouser @用户` - 提升白名单\n"+
+			"• `/revuser @用户` - 降级用户\n"+
+			"• `/rmemby @用户` - 删除用户",
+		total, withEmby, whitelist,
+	)
+	return c.Edit(text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
+}
+
+// handleAdminCodes 注册码管理
+func handleAdminCodes(c tele.Context) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "📝 注册码管理"})
+	
+	text := "📝 **注册码管理**\n\n" +
+		"使用命令管理注册码:\n" +
+		"• `/code 天数 数量` - 生成注册码\n" +
+		"• `/codestat` - 查看注册码统计\n" +
+		"• `/mycode` - 查看我的注册码\n" +
+		"• `/delcode 类型` - 删除注册码"
+	return c.Edit(text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
+}
+
+// handleAdminStats 统计信息
+func handleAdminStats(c tele.Context) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "📊 统计信息"})
+	
+	repo := repository.NewEmbyRepository()
+	total, withEmby, whitelist, _ := repo.GetStats()
+	
+	text := fmt.Sprintf(
+		"📊 **系统统计**\n\n"+
+			"👥 用户统计:\n"+
+			"• 总记录: %d\n"+
+			"• 有账户: %d\n"+
+			"• 白名单: %d\n",
+		total, withEmby, whitelist,
+	)
+	return c.Edit(text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
+}
+
+// handleAdminCheckEx 到期检测
+func handleAdminCheckEx(c tele.Context) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "🔍 请使用 /check_ex 命令", ShowAlert: true})
+	return nil
+}
+
+// handleAdminDayRanks 日榜
+func handleAdminDayRanks(c tele.Context) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "📈 请使用 /days_ranks 命令", ShowAlert: true})
+	return nil
+}
+
+// handleAdminWeekRanks 周榜
+func handleAdminWeekRanks(c tele.Context) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "📊 请使用 /week_ranks 命令", ShowAlert: true})
+	return nil
+}
+
+// handleOwnerConfig 系统配置
+func handleOwnerConfig(c tele.Context) error {
+	cfg := config.Get()
+	if !cfg.IsOwner(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 仅 Owner 可用", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "⚙️ 请使用 /config 命令", ShowAlert: true})
+	return nil
+}
+
+// handleOwnerBackup 备份数据库
+func handleOwnerBackup(c tele.Context) error {
+	cfg := config.Get()
+	if !cfg.IsOwner(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 仅 Owner 可用", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "💾 请使用 /backup_db 命令", ShowAlert: true})
+	return nil
+}
+
+// handleDevices 设备管理
+func handleDevices(c tele.Context) error {
+	c.Respond(&tele.CallbackResponse{Text: "📱 获取设备列表..."})
+	return c.Edit("📱 **设备管理**\n\n🚧 功能开发中...", keyboards.BackKeyboard("account_info"), tele.ModeMarkdown)
 }
