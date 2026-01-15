@@ -120,7 +120,7 @@ func (s *UserPlayRankService) GetUserPlayRank(days int) (*UserPlayRankResult, er
 				TG:    u.TG,
 				Name:  *u.Name,
 				Level: string(u.Lv),
-				IV:    u.IV,
+				IV:    u.Iv,
 			}
 		}
 	}
@@ -324,7 +324,6 @@ func (s *UserPlayRankService) getMedal(rank int) string {
 // numberToChinese 数字转中文
 func (s *UserPlayRankService) numberToChinese(n int) string {
 	digits := []string{"零", "一", "二", "三", "四", "五", "六", "七", "八", "九"}
-	units := []string{"", "十", "百"}
 
 	if n < 10 {
 		return digits[n]
