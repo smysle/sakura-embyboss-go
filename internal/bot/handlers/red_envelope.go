@@ -42,8 +42,6 @@ func HandleRedEnvelope(c tele.Context) error {
 
 // handleNormalRedEnvelope 处理普通红包
 func handleNormalRedEnvelope(c tele.Context, args []string) error {
-	cfg := config.Get()
-
 	if len(args) < 2 {
 		return c.Send(
 			"🧧 **发红包**\n\n"+

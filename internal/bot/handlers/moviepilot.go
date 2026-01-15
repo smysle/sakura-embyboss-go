@@ -12,6 +12,7 @@ import (
 	"github.com/smysle/sakura-embyboss-go/internal/bot/keyboards"
 	"github.com/smysle/sakura-embyboss-go/internal/bot/session"
 	"github.com/smysle/sakura-embyboss-go/internal/config"
+	"github.com/smysle/sakura-embyboss-go/internal/database/models"
 	"github.com/smysle/sakura-embyboss-go/internal/database/repository"
 	"github.com/smysle/sakura-embyboss-go/internal/moviepilot"
 	"github.com/smysle/sakura-embyboss-go/pkg/logger"
