@@ -140,6 +140,7 @@ func handleNameInput(c tele.Context, username string) error {
 		return c.Send(fmt.Sprintf("❌ 创建账户失败: %s", err.Error()))
 	}
 
+	cfg := config.Get()
 	text := fmt.Sprintf(
 		"🎉 **账户创建成功！**\n\n"+
 			"**用户名**: `%s`\n"+

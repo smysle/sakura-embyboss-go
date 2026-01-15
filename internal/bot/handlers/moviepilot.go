@@ -309,7 +309,7 @@ func HandleMPSelectDownload(c tele.Context) error {
 		result.Title,
 		downloadID,
 		needCost, money,
-		embyUser.IV-needCost, money,
+		embyUser.Iv-needCost, money,
 	), tele.ModeMarkdown)
 }
 

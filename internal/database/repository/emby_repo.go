@@ -139,11 +139,11 @@ func (r *EmbyRepository) CountStats() (total int64, withEmby int64, whitelist in
 // BatchUpdateIV 批量更新邀请次数
 func (r *EmbyRepository) BatchUpdateIV(updates []struct {
 	TG int64
-	IV int
+	Iv int
 }) error {
 	tx := r.db.Begin()
 	for _, u := range updates {
-		if err := tx.Model(&models.Emby{}).Where("tg = ?", u.TG).Update("iv", u.IV).Error; err != nil {
+		if err := tx.Model(&models.Emby{}).Where("tg = ?", u.TG).Update("iv", u.Iv).Error; err != nil {
 			tx.Rollback()
 			return err
 		}
