@@ -33,7 +33,7 @@ func handleMembersPanel(c tele.Context) error {
 		name = *user.Name
 	}
 
-	lvStr := models.GetLevelName(user.Lv)
+	lvStr := user.GetLevelName()
 	
 	exStr := "无"
 	if user.Ex != nil {
@@ -51,7 +51,7 @@ func handleMembersPanel(c tele.Context) error {
 		c.Sender().ID,
 		lvStr,
 		cfg.Money,
-		user.IV,
+		user.Iv,
 		name,
 		c.Sender().ID,
 		exStr,
@@ -142,7 +142,7 @@ func handleStore(c tele.Context) error {
 			"• 白名单 - %d %s\n"+
 			"• 邀请码 - %d %s\n\n"+
 			"选择要兑换的物品：",
-		cfg.Money, user.IV,
+		cfg.Money, user.Iv,
 		cfg.Open.ExchangeCost, cfg.Money,
 		cfg.Open.WhitelistCost, cfg.Money,
 		cfg.Open.InviteCost, cfg.Money,
@@ -166,7 +166,7 @@ func handleStoreRenew(c tele.Context) error {
 
 	// 检查积分是否足够
 	cost := cfg.Open.ExchangeCost
-	if user.IV < cost {
+	if user.Iv < cost {
 		return c.Respond(&tele.CallbackResponse{
 			Text:      fmt.Sprintf("积分不足，需要 %d %s", cost, cfg.Money),
 			ShowAlert: true,
@@ -174,7 +174,7 @@ func handleStoreRenew(c tele.Context) error {
 	}
 
 	// 扣除积分
-	newIV := user.IV - cost
+	newIV := user.Iv - cost
 	
 	// 续期 1 天
 	var newEx time.Time
@@ -222,7 +222,7 @@ func handleStoreWhitelist(c tele.Context) error {
 
 	// 检查积分
 	cost := cfg.Open.WhitelistCost
-	if user.IV < cost {
+	if user.Iv < cost {
 		return c.Respond(&tele.CallbackResponse{
 			Text:      fmt.Sprintf("积分不足，需要 %d %s", cost, cfg.Money),
 			ShowAlert: true,
@@ -230,7 +230,7 @@ func handleStoreWhitelist(c tele.Context) error {
 	}
 
 	// 扣除积分并升级
-	newIV := user.IV - cost
+	newIV := user.Iv - cost
 	if err := repo.UpdateFields(c.Sender().ID, map[string]interface{}{
 		"iv": newIV,
 		"lv": models.LevelA,
@@ -272,7 +272,7 @@ func handleStoreReborn(c tele.Context) error {
 
 	// 解封需要的积分（可配置）
 	cost := 500 // 默认 500 积分解封
-	if user.IV < cost {
+	if user.Iv < cost {
 		return c.Respond(&tele.CallbackResponse{
 			Text:      fmt.Sprintf("积分不足，解封需要 %d %s", cost, cfg.Money),
 			ShowAlert: true,
@@ -287,7 +287,7 @@ func handleStoreReborn(c tele.Context) error {
 	}
 
 	// 更新数据库
-	newIV := user.IV - cost
+	newIV := user.Iv - cost
 	newEx := time.Now().AddDate(0, 0, 7) // 解封后给 7 天有效期
 	if err := repo.UpdateFields(c.Sender().ID, map[string]interface{}{
 		"iv": newIV,

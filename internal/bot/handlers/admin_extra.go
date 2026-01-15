@@ -59,7 +59,7 @@ func UInfo(c tele.Context) error {
 		embyID = *user.EmbyID
 	}
 
-	lvStr := models.GetLevelName(user.Lv)
+	lvStr := user.GetLevelName()
 
 	exStr := "无"
 	if user.Ex != nil {
@@ -111,7 +111,7 @@ func UInfo(c tele.Context) error {
 		name,
 		embyID,
 		lvStr,
-		user.IV,
+		user.Iv,
 		user.Us,
 		crStr,
 		exStr,
@@ -176,7 +176,7 @@ func CoinsAll(c tele.Context) error {
 	// 批量更新积分
 	successCount := 0
 	for _, user := range users {
-		newIV := user.IV + coins
+		newIV := user.Iv + coins
 		if err := repo.UpdateFields(user.TG, map[string]interface{}{"iv": newIV}); err != nil {
 			logger.Error().Err(err).Int64("tg", user.TG).Msg("更新用户积分失败")
 		} else {
@@ -446,7 +446,7 @@ func CoinsClear(c tele.Context) error {
 	// 批量清空积分
 	successCount := 0
 	for _, user := range users {
-		if user.IV > 0 {
+		if user.Iv > 0 {
 			if err := repo.UpdateFields(user.TG, map[string]interface{}{"iv": 0}); err != nil {
 				logger.Error().Err(err).Int64("tg", user.TG).Msg("清空用户积分失败")
 			} else {
