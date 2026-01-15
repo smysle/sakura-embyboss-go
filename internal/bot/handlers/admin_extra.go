@@ -186,7 +186,7 @@ func CoinsAll(c tele.Context) error {
 
 	logger.Info().
 		Int("coins", coins).
-		String("level", level).
+		Str("level", level).
 		Int("success", successCount).
 		Int64("admin", c.Sender().ID).
 		Msg("批量发放积分")
@@ -456,7 +456,7 @@ func CoinsClear(c tele.Context) error {
 	}
 
 	logger.Info().
-		String("level", level).
+		Str("level", level).
 		Int("success", successCount).
 		Int64("owner", c.Sender().ID).
 		Msg("批量清空积分")
