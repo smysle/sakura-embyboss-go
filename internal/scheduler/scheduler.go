@@ -97,6 +97,18 @@ func (s *Scheduler) registerJobs() {
 		s.cron.Every(1).Day().At("03:00").Do(s.backupDatabase)
 		logger.Info().Msg("已注册: 数据库备份任务 (每天 03:00)")
 	}
+
+	// 用户日播放榜 - 每天 23 点
+	if cfg.DayPlayRank {
+		s.cron.Every(1).Day().At("23:00").Do(s.generateDayPlayRanks)
+		logger.Info().Msg("已注册: 用户日播放榜任务 (每天 23:00)")
+	}
+
+	// 用户周播放榜 - 每周日 23 点
+	if cfg.WeekPlayRank {
+		s.cron.Every(1).Week().Sunday().At("23:00").Do(s.generateWeekPlayRanks)
+		logger.Info().Msg("已注册: 用户周播放榜任务 (每周日 23:00)")
+	}
 }
 
 // AddJob 添加自定义任务
@@ -268,6 +280,46 @@ func (s *Scheduler) backupDatabase() {
 	}
 }
 
+// generateDayPlayRanks 生成用户日播放榜
+func (s *Scheduler) generateDayPlayRanks() {
+	logger.Info().Msg("执行定时任务: 用户日播放榜")
+
+	if s.bot == nil {
+		logger.Error().Msg("Bot 未设置，无法发送用户播放榜")
+		return
+	}
+
+	playSvc := service.NewUserPlayRankService()
+	playSvc.SetBot(s.bot)
+
+	// 日榜发放积分
+	if err := playSvc.GenerateAndSendPlayRank(1, true); err != nil {
+		logger.Error().Err(err).Msg("发送用户日播放榜失败")
+	} else {
+		logger.Info().Msg("用户日播放榜发送成功")
+	}
+}
+
+// generateWeekPlayRanks 生成用户周播放榜
+func (s *Scheduler) generateWeekPlayRanks() {
+	logger.Info().Msg("执行定时任务: 用户周播放榜")
+
+	if s.bot == nil {
+		logger.Error().Msg("Bot 未设置，无法发送用户播放榜")
+		return
+	}
+
+	playSvc := service.NewUserPlayRankService()
+	playSvc.SetBot(s.bot)
+
+	// 周榜发放积分
+	if err := playSvc.GenerateAndSendPlayRank(7, true); err != nil {
+		logger.Error().Err(err).Msg("发送用户周播放榜失败")
+	} else {
+		logger.Info().Msg("用户周播放榜发送成功")
+	}
+}
+
 // RunNow 立即执行指定任务（用于调试）
 func (s *Scheduler) RunNow(taskName string) error {
 	switch taskName {
@@ -275,6 +327,10 @@ func (s *Scheduler) RunNow(taskName string) error {
 		s.generateDayRanks()
 	case "weekrank":
 		s.generateWeekRanks()
+	case "dayplayrank":
+		s.generateDayPlayRanks()
+	case "weekplayrank":
+		s.generateWeekPlayRanks()
 	case "check_expired":
 		s.checkExpired()
 	case "low_activity":

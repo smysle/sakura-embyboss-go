@@ -96,6 +96,40 @@ func OnCallback(c tele.Context) error {
 		return handleOwnerBackup(c)
 	case "devices":
 		return handleDevices(c)
+	case "members":
+		return handleMembersPanel(c)
+	case "delme":
+		return handleDelMe(c)
+	case "delemby":
+		// 确认删除账户 delemby|{embyID}
+		if len(parts) >= 2 {
+			return handleConfirmDelMe(c, parts[1])
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	case "store", "storeall":
+		return handleStore(c)
+	case "store_renew":
+		return handleStoreRenew(c)
+	case "store_whitelist":
+		return handleStoreWhitelist(c)
+	case "store_reborn":
+		return handleStoreReborn(c)
+	case "embyblock":
+		return handleEmbyBlock(c)
+	case "emby_block":
+		// 隐藏媒体库 emby_block|{libID}
+		if len(parts) >= 2 {
+			return handleToggleLibrary(c, parts[1], false)
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	case "emby_unblock":
+		// 显示媒体库 emby_unblock|{libID}
+		if len(parts) >= 2 {
+			return handleToggleLibrary(c, parts[1], true)
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	case "server":
+		return handleServerInfo(c)
 	case "noop":
 		return c.Respond()
 	default:
@@ -437,7 +471,7 @@ func handleAdminUsers(c tele.Context) error {
 	c.Respond(&tele.CallbackResponse{Text: "👥 用户管理"})
 	
 	repo := repository.NewEmbyRepository()
-	total, withEmby, whitelist, _ := repo.GetStats()
+	total, withEmby, whitelist, _ := repo.CountStats()
 	
 	text := fmt.Sprintf(
 		"👥 **用户管理**\n\n"+
@@ -481,7 +515,7 @@ func handleAdminStats(c tele.Context) error {
 	c.Respond(&tele.CallbackResponse{Text: "📊 统计信息"})
 	
 	repo := repository.NewEmbyRepository()
-	total, withEmby, whitelist, _ := repo.GetStats()
+	total, withEmby, whitelist, _ := repo.CountStats()
 	
 	text := fmt.Sprintf(
 		"📊 **系统统计**\n\n"+

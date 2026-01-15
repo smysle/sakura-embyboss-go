@@ -237,3 +237,107 @@ func CodeDaysKeyboard() *tele.ReplyMarkup {
 	)
 	return markup
 }
+
+// MembersPanelKeyboard 用户面板键盘
+func MembersPanelKeyboard(hasAccount bool, isAdmin bool) *tele.ReplyMarkup {
+	markup := &tele.ReplyMarkup{}
+
+	var rows []tele.Row
+
+	if hasAccount {
+		// 有账户的功能
+		rows = append(rows, markup.Row(
+			markup.Data("📊 服务器", "server"),
+			markup.Data("🔑 重置密码", "reset_pwd"),
+		))
+		rows = append(rows, markup.Row(
+			markup.Data("📚 媒体库管理", "embyblock"),
+			markup.Data("🏪 积分商城", "store"),
+		))
+		rows = append(rows, markup.Row(
+			markup.Data("🗑️ 删除账户", "delme"),
+		))
+	} else {
+		// 无账户的功能
+		rows = append(rows, markup.Row(
+			markup.Data("📝 创建账户", "register"),
+			markup.Data("🎫 使用注册码", "use_code"),
+		))
+		if isAdmin {
+			rows = append(rows, markup.Row(
+				markup.Data("🔗 换绑TG", "changetg"),
+				markup.Data("🔗 绑定TG", "bindtg"),
+			))
+		}
+	}
+
+	rows = append(rows, markup.Row(
+		markup.Data("« 返回", "back_start"),
+	))
+
+	markup.Inline(rows...)
+	return markup
+}
+
+// StoreKeyboard 积分商城键盘
+func StoreKeyboard() *tele.ReplyMarkup {
+	markup := &tele.ReplyMarkup{}
+
+	markup.Inline(
+		markup.Row(
+			markup.Data("📅 续期天数", "store_renew"),
+			markup.Data("⭐ 白名单", "store_whitelist"),
+		),
+		markup.Row(
+			markup.Data("🔓 解封账户", "store_reborn"),
+		),
+		markup.Row(
+			markup.Data("« 返回", "members"),
+		),
+	)
+	return markup
+}
+
+// DeleteAccountKeyboard 删除账户确认键盘
+func DeleteAccountKeyboard(embyID string) *tele.ReplyMarkup {
+	markup := &tele.ReplyMarkup{}
+
+	markup.Inline(
+		markup.Row(
+			markup.Data("✅ 确认删除", fmt.Sprintf("delemby|%s", embyID)),
+			markup.Data("❌ 取消", "members"),
+		),
+	)
+	return markup
+}
+
+// EmbyLibraryKeyboard 媒体库管理键盘
+func EmbyLibraryKeyboard(libs map[string]string, enabledMap map[string]bool, enableAll bool) *tele.ReplyMarkup {
+	markup := &tele.ReplyMarkup{}
+
+	var rows []tele.Row
+
+	for libID, libName := range libs {
+		var status, action, callback string
+		if enableAll || enabledMap[libID] {
+			status = "✅"
+			action = "隐藏"
+			callback = fmt.Sprintf("emby_block|%s", libID)
+		} else {
+			status = "❌"
+			action = "显示"
+			callback = fmt.Sprintf("emby_unblock|%s", libID)
+		}
+		rows = append(rows, markup.Row(
+			markup.Data(fmt.Sprintf("%s %s - %s", status, libName, action), callback),
+		))
+	}
+
+	rows = append(rows, markup.Row(
+		markup.Data("« 返回", "members"),
+	))
+
+	markup.Inline(rows...)
+	return markup
+}
+
