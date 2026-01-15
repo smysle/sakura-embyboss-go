@@ -98,9 +98,17 @@ func (c *Client) request(method, endpoint string, body interface{}) (*APIResult,
 	statusCode := resp.StatusCode()
 	if statusCode == http.StatusOK || statusCode == http.StatusNoContent {
 		var data interface{}
-		if len(resp.Body()) > 0 && resp.Header().Get("Content-Type") == "application/json" {
+		contentType := resp.Header().Get("Content-Type")
+		// 检查 Content-Type 是否包含 json（可能是 application/json 或 application/json; charset=utf-8）
+		if len(resp.Body()) > 0 && strings.Contains(contentType, "json") {
 			if err := json.Unmarshal(resp.Body(), &data); err != nil {
+				logger.Warn().Err(err).Str("url", url).Msg("JSON 解析失败，返回原始数据")
 				return &APIResult{Success: true, Data: resp.Body()}, nil
+			}
+		} else if len(resp.Body()) > 0 {
+			// 尝试直接解析为 JSON（有些 Emby 服务器可能不设置正确的 Content-Type）
+			if err := json.Unmarshal(resp.Body(), &data); err == nil {
+				return &APIResult{Success: true, Data: data}, nil
 			}
 		}
 		return &APIResult{Success: true, Data: data}, nil
