@@ -126,6 +126,13 @@ func (b *Bot) registerHandlers() {
 	adminGroup.Handle("/auditdevice", handlers.AuditDevice)
 	adminGroup.Handle("/auditclient", handlers.AuditClient)
 
+	// 额外管理命令
+	adminGroup.Handle("/uinfo", handlers.UInfo)
+	adminGroup.Handle("/coinsall", handlers.CoinsAll)
+	adminGroup.Handle("/callall", handlers.CallAll)
+	adminGroup.Handle("/ucr", handlers.UCr)
+	adminGroup.Handle("/urm", handlers.URm)
+
 	// Owner 命令
 	ownerGroup := b.Group()
 	ownerGroup.Use(middleware.OwnerOnly())
@@ -137,6 +144,7 @@ func (b *Bot) registerHandlers() {
 	ownerGroup.Handle("/banall", handlers.BanAll)
 	ownerGroup.Handle("/unbanall", handlers.UnbanAll)
 	ownerGroup.Handle("/paolu", handlers.Paolu)
+	ownerGroup.Handle("/coinsclear", handlers.CoinsClear)
 
 	// 回调查询
 	b.Handle(tele.OnCallback, handlers.OnCallback)
@@ -178,6 +186,11 @@ func (b *Bot) setCommands() {
 		{Text: "auditip", Description: "IP 审计 [管理]"},
 		{Text: "auditdevice", Description: "设备审计 [管理]"},
 		{Text: "auditclient", Description: "客户端审计 [管理]"},
+		{Text: "uinfo", Description: "查询用户信息 [管理]"},
+		{Text: "coinsall", Description: "批量发放积分 [管理]"},
+		{Text: "callall", Description: "广播消息 [管理]"},
+		{Text: "ucr", Description: "创建非TG用户 [管理]"},
+		{Text: "urm", Description: "删除指定用户 [管理]"},
 		{Text: "restart", Description: "重启bot [管理]"},
 	}...)
 
@@ -190,6 +203,7 @@ func (b *Bot) setCommands() {
 		{Text: "banall", Description: "禁用所有用户 [owner]"},
 		{Text: "unbanall", Description: "解除所有用户禁用 [owner]"},
 		{Text: "paolu", Description: "跑路! 删除所有用户 [owner]"},
+		{Text: "coinsclear", Description: "清空用户积分 [owner]"},
 	}...)
 
 	// 为不同用户设置不同命令
