@@ -63,12 +63,12 @@ func HandleSearchResource(c tele.Context) error {
 		return c.Edit("⚠️ 数据库没有您的记录，请先 /start 录入")
 	}
 
-	if embyUser.Lv == nil || (*embyUser.Lv != "a" && *embyUser.Lv != "b") {
+	if embyUser.Lv != models.LevelA && embyUser.Lv != models.LevelB {
 		return c.Edit("🫡 您没有权限使用此功能")
 	}
 
 	// 检查白名单限制
-	if cfg.MoviePilot.Level == "a" && *embyUser.Lv != "a" {
+	if cfg.MoviePilot.Level == "a" && embyUser.Lv != models.LevelA {
 		return c.Edit("🫡 此功能仅限白名单用户使用")
 	}
 
@@ -89,7 +89,7 @@ func HandleSearchResource(c tele.Context) error {
 			"请在 120s 内发送您想点播的资源名称\n"+
 			"退出请点 /cancel",
 		cfg.MoviePilot.Price, money,
-		embyUser.IV, money,
+		embyUser.Iv, money,
 	), tele.ModeMarkdown)
 }
 
@@ -266,9 +266,9 @@ func HandleMPSelectDownload(c tele.Context) error {
 		money = "花币"
 	}
 
-	if embyUser.IV < needCost {
+	if embyUser.Iv < needCost {
 		return c.Send(fmt.Sprintf("❌ %s 不足\n\n此资源需要: %d %s\n您当前拥有: %d %s",
-			money, needCost, money, embyUser.IV, money))
+			money, needCost, money, embyUser.Iv, money))
 	}
 
 	c.Send("⏳ 正在添加下载任务...")
@@ -283,7 +283,7 @@ func HandleMPSelectDownload(c tele.Context) error {
 
 	// 扣除费用
 	embyRepo.UpdateFields(userID, map[string]interface{}{
-		"iv": embyUser.IV - needCost,
+		"iv": embyUser.Iv - needCost,
 	})
 
 	// 清除搜索会话

@@ -56,7 +56,6 @@ func Cancel(c tele.Context) error {
 func handleCodeInput(c tele.Context, code string) error {
 	userID := c.Sender().ID
 	sessionMgr := session.GetManager()
-	cfg := config.Get()
 
 	// 验证注册码格式
 	code = strings.ToUpper(strings.TrimSpace(code))
@@ -114,7 +113,6 @@ func handleCodeInput(c tele.Context, code string) error {
 func handleNameInput(c tele.Context, username string) error {
 	userID := c.Sender().ID
 	sessionMgr := session.GetManager()
-	cfg := config.Get()
 
 	// 验证用户名格式
 	username = strings.TrimSpace(username)

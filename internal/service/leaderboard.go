@@ -3,6 +3,7 @@ package service
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/smysle/sakura-embyboss-go/internal/config"
@@ -241,4 +242,88 @@ func getMedal(rank int) string {
 	default:
 		return "  "
 	}
+}
+
+// UserPlayStat 用户播放统计
+type UserPlayStat struct {
+	UserID     string
+	UserName   string
+	TotalHours float64
+	PlayCount  int
+}
+
+// GetUserPlayStats 获取用户播放统计
+func (s *LeaderboardService) GetUserPlayStats(limit int) ([]UserPlayStat, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+
+	ranking, err := s.embyClient.GetUserRanking(startOfMonth, now, limit)
+	if err != nil {
+		logger.Warn().Err(err).Msg("获取用户播放统计失败")
+		return nil, err
+	}
+
+	stats := make([]UserPlayStat, 0, len(ranking))
+	for _, r := range ranking {
+		stats = append(stats, UserPlayStat{
+			UserID:     r.UserID,
+			UserName:   r.UserName,
+			TotalHours: float64(r.WatchTime) / 3600.0,
+			PlayCount:  r.PlayCount,
+		})
+	}
+
+	return stats, nil
+}
+
+// GenerateDailyRank 生成日榜图片
+func (s *LeaderboardService) GenerateDailyRank() (string, error) {
+	result, err := s.GetDayRank(10)
+	if err != nil {
+		return "", err
+	}
+
+	return s.generateRankImage(result)
+}
+
+// GenerateWeeklyRank 生成周榜图片
+func (s *LeaderboardService) GenerateWeeklyRank() (string, error) {
+	result, err := s.GetWeekRank(10)
+	if err != nil {
+		return "", err
+	}
+
+	return s.generateRankImage(result)
+}
+
+// generateRankImage 生成排行榜图片
+func (s *LeaderboardService) generateRankImage(result *RankResult) (string, error) {
+	// 使用 imggen 包生成图片
+	// 暂时返回文本文件作为替代
+	filename := fmt.Sprintf("/tmp/rank_%s_%s.txt", result.Type, time.Now().Format("20060102_150405"))
+
+	// 写入排行榜文本
+	text := result.FormatRankText()
+	if err := writeTextFile(filename, text); err != nil {
+		return "", err
+	}
+
+	logger.Info().Str("file", filename).Str("type", string(result.Type)).Msg("排行榜已生成")
+	return filename, nil
+}
+
+// writeTextFile 写入文本文件
+func writeTextFile(filename, content string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(content)
+	return err
 }
