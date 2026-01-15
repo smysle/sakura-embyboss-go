@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  embyboss:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    container_name: sakura_embyboss_go
+    restart: unless-stopped
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - ./log:/app/log
+      - ./db_backup:/app/db_backup
+    ports:
+      - "8838:8838"
+    environment:
+      - TZ=Asia/Shanghai
+    depends_on:
+      - mysql
+    networks:
+      - embyboss_network
+
+  mysql:
+    image: mysql:5.7
+    container_name: sakura_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: your_root_password
+      MYSQL_DATABASE: embyboss
+      MYSQL_USER: embyboss
+      MYSQL_PASSWORD: your_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - embyboss_network
+
+volumes:
+  mysql_data:
+
+networks:
+  embyboss_network:
+    driver: bridge

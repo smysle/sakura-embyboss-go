@@ -1,0 +1,100 @@
+{
+  "bot_name": "xxxbot",
+  "bot_token": "5701:AAEvAHzsg30",
+  "owner": 123456789,
+  "group": [-100123456789],
+  "main_group": "your_group_username",
+  "channel": "your_channel_username",
+  "bot_photo": "https://example.com/photo.png",
+  "admins": [],
+  "money": "花币",
+  "emby": {
+    "api_key": "your_emby_api_key",
+    "url": "http://127.0.0.1:8096",
+    "line": "your.domain.com",
+    "whitelist_line": null,
+    "blocked_libs": ["nsfw"],
+    "extra_libs": ["电视"],
+    "blocked_clients": [
+      ".*curl.*",
+      ".*wget.*",
+      ".*python.*"
+    ],
+    "terminate_session_on_filter": true,
+    "block_user_on_filter": false
+  },
+  "database": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "root",
+    "password": "",
+    "name": "embyboss",
+    "is_docker": true,
+    "docker_name": "mysql",
+    "backup_dir": "./db_backup",
+    "backup_max_count": 7
+  },
+  "open": {
+    "status": false,
+    "max_users": 1000,
+    "timing": 0,
+    "temp": 0,
+    "checkin": true,
+    "checkin_level": "d",
+    "exchange": true,
+    "whitelist": true,
+    "invite": false,
+    "invite_level": "b",
+    "leave_ban": true,
+    "user_plays": true,
+    "checkin_reward": [1, 10],
+    "exchange_cost": 300,
+    "whitelist_cost": 9999,
+    "invite_cost": 1000
+  },
+  "ranks": {
+    "logo": "SAKURA",
+    "backdrop": false
+  },
+  "scheduler": {
+    "day_rank": true,
+    "week_rank": true,
+    "day_play_rank": false,
+    "week_play_rank": true,
+    "check_expired": true,
+    "low_activity": false,
+    "backup_db": true
+  },
+  "proxy": {
+    "scheme": "",
+    "host": "",
+    "port": 0,
+    "username": "",
+    "password": ""
+  },
+  "moviepilot": {
+    "enabled": false,
+    "url": "",
+    "username": "",
+    "password": "",
+    "price": 1,
+    "level": "b"
+  },
+  "auto_update": {
+    "enabled": true,
+    "git_repo": "berry8838/Sakura_embyboss"
+  },
+  "api": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 8838,
+    "allow_origins": ["*"]
+  },
+  "red_envelope": {
+    "enabled": true,
+    "allow_private": true
+  },
+  "kk_gift_days": 30,
+  "activity_check_days": 21,
+  "freeze_days": 5
+}

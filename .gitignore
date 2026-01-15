@@ -1,0 +1,49 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+embyboss
+sakura-embyboss*
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config files (keep example)
+config.json
+!configs/config.example.json
+
+# Logs
+logs/
+log/
+*.log
+
+# Database backups
+backups/
+db_backup/
+
+# Temporary files
+tmp/
+temp/
+dist/
+
+# Environment
+.env
+.env.local

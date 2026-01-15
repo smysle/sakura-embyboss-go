@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    image: sakura-embyboss-go:latest
+    container_name: sakura-embyboss
+    restart: unless-stopped
+    ports:
+      - "8838:8838"
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - ./backups:/app/backups
+      - ./logs:/app/logs
+    environment:
+      - TZ=Asia/Shanghai
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - embyboss-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: sakura-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-embyboss123}
+      MYSQL_DATABASE: emby
+      MYSQL_USER: emby
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-emby123}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - embyboss-network
+
+volumes:
+  mysql_data:
+
+networks:
+  embyboss-network:
+    driver: bridge
