@@ -6,12 +6,17 @@ WORKDIR /app
 # 安装构建依赖
 RUN apk add --no-cache git ca-certificates tzdata
 
-# 复制 go.mod 和 go.sum
-COPY go.mod go.sum ./
+# 复制 go.mod (go.sum 会自动生成)
+COPY go.mod ./
+
+# 下载依赖并生成 go.sum
 RUN go mod download
 
 # 复制源代码
 COPY . .
+
+# 确保依赖完整
+RUN go mod tidy
 
 # 构建
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/embyboss ./cmd/bot
