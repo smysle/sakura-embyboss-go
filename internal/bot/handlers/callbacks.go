@@ -18,6 +18,37 @@ import (
 	"github.com/smysle/sakura-embyboss-go/pkg/logger"
 )
 
+// editOrReply 编辑消息或发送新消息
+// 解决 Telegram "there is no text in the message to edit" 错误
+// 当消息是图片/媒体消息时，使用 EditCaption；否则使用 Edit
+func editOrReply(c tele.Context, text string, opts ...interface{}) error {
+	msg := c.Message()
+	if msg == nil {
+		// 没有消息可编辑，发送新消息
+		return c.Send(text, opts...)
+	}
+
+	// 检查消息是否是媒体消息（有 Photo、Video、Document 等）
+	if msg.Photo != nil || msg.Video != nil || msg.Document != nil || msg.Audio != nil {
+		// 媒体消息，使用 EditCaption
+		// 先更新 caption
+		if err := c.Bot().EditCaption(msg, text, opts...); err != nil {
+			// 如果编辑失败，尝试发送新消息
+			logger.Debug().Err(err).Msg("EditCaption failed, sending new message")
+			return c.Send(text, opts...)
+		}
+		return nil
+	}
+
+	// 普通文本消息，使用 Edit
+	if err := c.Edit(text, opts...); err != nil {
+		// 如果编辑失败，尝试发送新消息
+		logger.Debug().Err(err).Msg("Edit failed, sending new message")
+		return c.Send(text, opts...)
+	}
+	return nil
+}
+
 // OnCallback 回调查询处理器
 func OnCallback(c tele.Context) error {
 	data := c.Callback().Data
@@ -162,7 +193,7 @@ func handleBackStart(c tele.Context) error {
 		keyboard = keyboards.StartPanelKeyboard(isAdmin)
 	}
 
-	return c.Edit(text, keyboard, tele.ModeMarkdown)
+	return editOrReply(c, text, keyboard, tele.ModeMarkdown)
 }
 
 func handleClose(c tele.Context) error {
@@ -205,7 +236,7 @@ func handleRegister(c tele.Context) error {
 	result, err := client.CreateUser(c.Sender().Username, cfg.Open.Temp)
 	if err != nil {
 		logger.Error().Err(err).Msg("创建 Emby 账户失败")
-		return c.Edit("❌ 创建账户失败，请稍后重试")
+		return editOrReply(c, "❌ 创建账户失败，请稍后重试")
 	}
 
 	// 更新数据库
@@ -234,7 +265,7 @@ func handleRegister(c tele.Context) error {
 		cfg.Emby.Line,
 	)
 
-	return c.Edit(text, keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
+	return editOrReply(c, text, keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
 }
 
 func handleUseCode(c tele.Context) error {
@@ -251,7 +282,7 @@ func handleUseCode(c tele.Context) error {
 	sessionMgr.SetState(c.Sender().ID, session.StateWaitingCode)
 
 	c.Respond()
-	return c.Edit(
+	return editOrReply(c, 
 		"🎫 **请发送您的注册码**\n\n"+
 			"格式示例: `SAKURA-XXXXXXXXXXXX`\n\n"+
 			"_发送 /cancel 取消操作_",
@@ -298,7 +329,7 @@ func handleAccountInfo(c tele.Context) error {
 	)
 
 	c.Respond()
-	return c.Edit(text, keyboards.AccountInfoKeyboard(), tele.ModeMarkdown)
+	return editOrReply(c, text, keyboards.AccountInfoKeyboard(), tele.ModeMarkdown)
 }
 
 func getPassword(pwd *string) string {
@@ -322,13 +353,13 @@ func handleResetPwd(c tele.Context) error {
 
 	client := emby.GetClient()
 	if err := client.ResetPassword(*user.EmbyID); err != nil {
-		return c.Edit("❌ 重置密码失败")
+		return editOrReply(c, "❌ 重置密码失败")
 	}
 
 	// 更新数据库
 	repo.UpdateFields(c.Sender().ID, map[string]interface{}{"pwd": nil})
 
-	return c.Edit(
+	return editOrReply(c, 
 		"✅ 密码已重置为空\n\n您可以登录后自行设置新密码",
 		keyboards.BackKeyboard("back_start"),
 	)
@@ -378,7 +409,7 @@ func handleCheckin(c tele.Context) error {
 	)
 
 	c.Respond(&tele.CallbackResponse{Text: "🎯 签到成功！"})
-	return c.Edit(text, keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
+	return editOrReply(c, text, keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
 }
 
 func handleAdminPanel(c tele.Context) error {
@@ -392,7 +423,7 @@ func handleAdminPanel(c tele.Context) error {
 
 	c.Respond()
 	isOwner := cfg.IsOwner(c.Sender().ID)
-	return c.Edit("⚙️ **管理面板**\n\n请选择操作:", keyboards.AdminPanelKeyboard(isOwner), tele.ModeMarkdown)
+	return editOrReply(c, "⚙️ **管理面板**\n\n请选择操作:", keyboards.AdminPanelKeyboard(isOwner), tele.ModeMarkdown)
 }
 
 func handleSetLevel(c tele.Context, parts []string) error {
@@ -453,13 +484,13 @@ func OnInlineQuery(c tele.Context) error {
 // handleMyPlays 我的观影
 func handleMyPlays(c tele.Context) error {
 	c.Respond(&tele.CallbackResponse{Text: "📈 获取观影记录..."})
-	return c.Edit("📈 **我的观影**\n\n🚧 功能开发中...", keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
+	return editOrReply(c, "📈 **我的观影**\n\n🚧 功能开发中...", keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
 }
 
 // handleMyFavorites 我的收藏
 func handleMyFavorites(c tele.Context) error {
 	c.Respond(&tele.CallbackResponse{Text: "⭐ 获取收藏..."})
-	return c.Edit("⭐ **我的收藏**\n\n🚧 功能开发中...", keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
+	return editOrReply(c, "⭐ **我的收藏**\n\n🚧 功能开发中...", keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
 }
 
 // handleAdminUsers 用户管理
@@ -486,7 +517,7 @@ func handleAdminUsers(c tele.Context) error {
 			"• `/rmemby @用户` - 删除用户",
 		total, withEmby, whitelist,
 	)
-	return c.Edit(text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
+	return editOrReply(c, text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
 }
 
 // handleAdminCodes 注册码管理
@@ -503,7 +534,7 @@ func handleAdminCodes(c tele.Context) error {
 		"• `/codestat` - 查看注册码统计\n" +
 		"• `/mycode` - 查看我的注册码\n" +
 		"• `/delcode 类型` - 删除注册码"
-	return c.Edit(text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
+	return editOrReply(c, text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
 }
 
 // handleAdminStats 统计信息
@@ -525,7 +556,7 @@ func handleAdminStats(c tele.Context) error {
 			"• 白名单: %d\n",
 		total, withEmby, whitelist,
 	)
-	return c.Edit(text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
+	return editOrReply(c, text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
 }
 
 // handleAdminCheckEx 到期检测
@@ -581,5 +612,5 @@ func handleOwnerBackup(c tele.Context) error {
 // handleDevices 设备管理
 func handleDevices(c tele.Context) error {
 	c.Respond(&tele.CallbackResponse{Text: "📱 获取设备列表..."})
-	return c.Edit("📱 **设备管理**\n\n🚧 功能开发中...", keyboards.BackKeyboard("account_info"), tele.ModeMarkdown)
+	return editOrReply(c, "📱 **设备管理**\n\n🚧 功能开发中...", keyboards.BackKeyboard("account_info"), tele.ModeMarkdown)
 }

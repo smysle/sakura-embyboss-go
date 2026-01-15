@@ -45,7 +45,7 @@ func HandleDownloadCenter(c tele.Context) error {
 	}
 
 	c.Respond(&tele.CallbackResponse{Text: "🔍 点播中心"})
-	return c.Edit("🔍 欢迎进入点播中心\n\n请选择操作：", keyboards.DownloadCenterKeyboard())
+	return editOrReply(c, "🔍 欢迎进入点播中心\n\n请选择操作：", keyboards.DownloadCenterKeyboard())
 }
 
 // HandleSearchResource 处理搜索资源
@@ -61,16 +61,16 @@ func HandleSearchResource(c tele.Context) error {
 	// 检查用户权限
 	embyUser, err := repository.NewEmbyRepository().GetByTG(c.Sender().ID)
 	if err != nil {
-		return c.Edit("⚠️ 数据库没有您的记录，请先 /start 录入")
+		return editOrReply(c, "⚠️ 数据库没有您的记录，请先 /start 录入")
 	}
 
 	if embyUser.Lv != models.LevelA && embyUser.Lv != models.LevelB {
-		return c.Edit("🫡 您没有权限使用此功能")
+		return editOrReply(c, "🫡 您没有权限使用此功能")
 	}
 
 	// 检查白名单限制
 	if cfg.MoviePilot.Level == "a" && embyUser.Lv != models.LevelA {
-		return c.Edit("🫡 此功能仅限白名单用户使用")
+		return editOrReply(c, "🫡 此功能仅限白名单用户使用")
 	}
 
 	c.Respond(&tele.CallbackResponse{Text: "🔍 请输入资源名称"})
@@ -83,7 +83,7 @@ func HandleSearchResource(c tele.Context) error {
 		money = "花币"
 	}
 
-	return c.Edit(fmt.Sprintf(
+	return editOrReply(c, fmt.Sprintf(
 		"🎬 **点播中心**\n\n"+
 			"当前点播费用: 1GB 消耗 %d %s\n"+
 			"您当前拥有: %d %s\n\n"+
@@ -323,7 +323,7 @@ func HandleMPCancelSearch(c tele.Context) error {
 	session.GetManager().ClearSession(userID)
 
 	c.Respond(&tele.CallbackResponse{Text: "已取消"})
-	return c.Edit("🔍 已取消搜索", keyboards.BackToMemberKeyboard())
+	return editOrReply(c, "🔍 已取消搜索", keyboards.BackToMemberKeyboard())
 }
 
 // HandleViewDownloads 查看下载进度
@@ -340,16 +340,16 @@ func HandleViewDownloads(c tele.Context) error {
 
 	mpClient := moviepilot.GetClient()
 	if mpClient == nil {
-		return c.Edit("❌ MoviePilot 服务未配置")
+		return editOrReply(c, "❌ MoviePilot 服务未配置")
 	}
 
 	tasks, err := mpClient.GetDownloadTasks()
 	if err != nil {
-		return c.Edit("❌ 获取下载任务失败: " + err.Error())
+		return editOrReply(c, "❌ 获取下载任务失败: " + err.Error())
 	}
 
 	if len(tasks) == 0 {
-		return c.Edit("📭 当前没有下载任务")
+		return editOrReply(c, "📭 当前没有下载任务")
 	}
 
 	text := "📈 **下载任务列表**\n\n"
@@ -375,7 +375,7 @@ func HandleViewDownloads(c tele.Context) error {
 		text += "\n"
 	}
 
-	return c.Edit(text, tele.ModeMarkdown, keyboards.DownloadCenterKeyboard())
+	return editOrReply(c, text, tele.ModeMarkdown, keyboards.DownloadCenterKeyboard())
 }
 
 // getMPProgressBar 生成进度条

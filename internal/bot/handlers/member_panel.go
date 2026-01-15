@@ -22,7 +22,7 @@ func handleMembersPanel(c tele.Context) error {
 	repo := repository.NewEmbyRepository()
 	user, err := repo.GetByTG(c.Sender().ID)
 	if err != nil {
-		return c.Edit("⚠️ 数据库没有你，请重新 /start 录入")
+		return editOrReply(c, "⚠️ 数据库没有你，请重新 /start 录入")
 	}
 
 	cfg := config.Get()
@@ -59,7 +59,7 @@ func handleMembersPanel(c tele.Context) error {
 
 	hasAccount := user.EmbyID != nil && *user.EmbyID != ""
 	kb := keyboards.MembersPanelKeyboard(hasAccount, cfg.IsAdmin(c.Sender().ID))
-	return c.Edit(text, kb, tele.ModeMarkdown)
+	return editOrReply(c, text, kb, tele.ModeMarkdown)
 }
 
 // handleDelMe 删除账户
@@ -81,7 +81,7 @@ func handleDelMe(c tele.Context) error {
 		"倒计时 60s\n" +
 		"🛑 **停止请点 /cancel**"
 
-	return c.Edit(text, keyboards.BackKeyboard("members"))
+	return editOrReply(c, text, keyboards.BackKeyboard("members"))
 }
 
 // handleConfirmDelMe 确认删除账户
@@ -102,7 +102,7 @@ func handleConfirmDelMe(c tele.Context, embyID string) error {
 	client := emby.GetClient()
 	if err := client.DeleteUser(*user.EmbyID); err != nil {
 		logger.Error().Err(err).Str("embyID", *user.EmbyID).Msg("删除 Emby 账户失败")
-		return c.Edit("❌ 删除 Emby 账户失败，请联系管理员")
+		return editOrReply(c, "❌ 删除 Emby 账户失败，请联系管理员")
 	}
 
 	// 清空数据库记录
@@ -120,7 +120,7 @@ func handleConfirmDelMe(c tele.Context, embyID string) error {
 
 	logger.Info().Int64("tg", c.Sender().ID).Str("embyID", embyID).Msg("用户自助删除账户")
 
-	return c.Edit("✅ 您的账户已成功删除\n\n如需再次使用，请重新注册", keyboards.BackKeyboard("back_start"))
+	return editOrReply(c, "✅ 您的账户已成功删除\n\n如需再次使用，请重新注册", keyboards.BackKeyboard("back_start"))
 }
 
 // handleStore 积分商城
@@ -131,7 +131,7 @@ func handleStore(c tele.Context) error {
 	repo := repository.NewEmbyRepository()
 	user, err := repo.GetByTG(c.Sender().ID)
 	if err != nil {
-		return c.Edit("⚠️ 数据库没有你，请重新 /start 录入")
+		return editOrReply(c, "⚠️ 数据库没有你，请重新 /start 录入")
 	}
 
 	text := fmt.Sprintf(
@@ -148,7 +148,7 @@ func handleStore(c tele.Context) error {
 		cfg.Open.InviteCost, cfg.Money,
 	)
 
-	return c.Edit(text, keyboards.StoreKeyboard(), tele.ModeMarkdown)
+	return editOrReply(c, text, keyboards.StoreKeyboard(), tele.ModeMarkdown)
 }
 
 // handleStoreRenew 兑换续期
@@ -204,7 +204,7 @@ func handleStoreRenew(c tele.Context) error {
 		newIV,
 	)
 
-	return c.Edit(text, keyboards.BackKeyboard("store"))
+	return editOrReply(c, text, keyboards.BackKeyboard("store"))
 }
 
 // handleStoreWhitelist 兑换白名单
@@ -249,7 +249,7 @@ func handleStoreWhitelist(c tele.Context) error {
 		newIV,
 	)
 
-	return c.Edit(text, keyboards.BackKeyboard("store"))
+	return editOrReply(c, text, keyboards.BackKeyboard("store"))
 }
 
 // handleStoreReborn 解封账户（积分兑换）
@@ -310,7 +310,7 @@ func handleStoreReborn(c tele.Context) error {
 		newIV,
 	)
 
-	return c.Edit(text, keyboards.BackKeyboard("members"))
+	return editOrReply(c, text, keyboards.BackKeyboard("members"))
 }
 
 // handleEmbyBlock 媒体库管理
@@ -331,13 +331,13 @@ func handleEmbyBlock(c tele.Context) error {
 	client := emby.GetClient()
 	libs, err := client.GetLibraries()
 	if err != nil {
-		return c.Edit("获取媒体库列表失败", keyboards.BackKeyboard("members"))
+		return editOrReply(c, "获取媒体库列表失败", keyboards.BackKeyboard("members"))
 	}
 
 	// 获取用户当前策略
 	embyUser, err := client.GetUser(*user.EmbyID)
 	if err != nil {
-		return c.Edit("获取用户信息失败", keyboards.BackKeyboard("members"))
+		return editOrReply(c, "获取用户信息失败", keyboards.BackKeyboard("members"))
 	}
 
 	enabledFolders := make(map[string]bool)
@@ -350,7 +350,7 @@ func handleEmbyBlock(c tele.Context) error {
 	text := "**📚 媒体库管理**\n\n选择要显示/隐藏的媒体库："
 
 	kb := keyboards.EmbyLibraryKeyboard(libs, enabledFolders, embyUser.Policy != nil && embyUser.Policy.EnableAllFolders)
-	return c.Edit(text, kb, tele.ModeMarkdown)
+	return editOrReply(c, text, kb, tele.ModeMarkdown)
 }
 
 // handleToggleLibrary 切换媒体库显示/隐藏
@@ -428,5 +428,5 @@ func handleServerInfo(c tele.Context) error {
 		line, pwd,
 	)
 
-	return c.Edit(text, keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	return editOrReply(c, text, keyboards.BackKeyboard("members"), tele.ModeMarkdown)
 }

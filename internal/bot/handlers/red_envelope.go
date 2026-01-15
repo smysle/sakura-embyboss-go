@@ -326,7 +326,7 @@ func updateRedEnvelopeMessage(c tele.Context, uuid string) error {
 		}
 	}
 
-	return c.Edit(sb.String(), keyboards.CloseKeyboard(), tele.ModeMarkdown)
+	return editOrReply(c, sb.String(), keyboards.CloseKeyboard(), tele.ModeMarkdown)
 }
 
 // updateRedEnvelopeMessagePartial 更新红包消息（还有剩余）
@@ -353,5 +353,5 @@ func updateRedEnvelopeMessagePartial(c tele.Context, uuid string, result *servic
 		),
 	)
 
-	return c.Edit(text, markup, tele.ModeMarkdown)
+	return editOrReply(c, text, markup, tele.ModeMarkdown)
 }

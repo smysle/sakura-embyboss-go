@@ -274,7 +274,9 @@ func CallAll(c tele.Context) error {
 	)
 
 	if status != nil {
-		c.Bot().Edit(status, resultText, tele.ModeMarkdown)
+		if err := c.Bot().Edit(status, resultText, tele.ModeMarkdown); err != nil {
+			logger.Debug().Err(err).Msg("Edit status failed")
+		}
 	} else {
 		c.Reply(resultText, tele.ModeMarkdown)
 	}
