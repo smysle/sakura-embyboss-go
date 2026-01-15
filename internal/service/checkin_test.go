@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smysle/sakura-embyboss-go/internal/config"
 	"github.com/smysle/sakura-embyboss-go/internal/database/models"
 )
 
@@ -114,7 +115,11 @@ func TestCheckinService_calculateConsecutiveDays(t *testing.T) {
 
 func TestCheckinService_calculateReward(t *testing.T) {
 	svc := &CheckinService{
-		cfg: nil, // 会使用默认值
+		cfg: &config.Config{
+			Open: config.OpenConfig{
+				CheckinReward: []int{1, 10},
+			},
+		},
 	}
 
 	// 测试连续签到加成
@@ -141,7 +146,11 @@ func TestCheckinService_calculateReward(t *testing.T) {
 
 func TestCheckinService_isLevelAllowed(t *testing.T) {
 	svc := &CheckinService{
-		cfg: nil, // 需要模拟配置
+		cfg: &config.Config{
+			Open: config.OpenConfig{
+				CheckinLevel: "d",
+			},
+		},
 	}
 
 	// 封禁用户不能签到
