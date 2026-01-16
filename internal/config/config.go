@@ -29,6 +29,8 @@ type Config struct {
 	AutoUpdate AutoUpdateConfig `json:"auto_update"`
 	API        APIConfig        `json:"api"`
 	RedEnvelope RedEnvelopeConfig `json:"red_envelope"`
+	AntiChannel AntiChannelConfig `json:"anti_channel"`
+	Nezha       NezhaConfig       `json:"nezha"`
 
 	KKGiftDays        int `json:"kk_gift_days"`
 	ActivityCheckDays int `json:"activity_check_days"`
@@ -144,6 +146,19 @@ type APIConfig struct {
 type RedEnvelopeConfig struct {
 	Enabled      bool `json:"enabled"`
 	AllowPrivate bool `json:"allow_private"`
+}
+
+// AntiChannelConfig 反皮套人配置
+type AntiChannelConfig struct {
+	Enabled   bool    `json:"enabled"`
+	WhiteList []int64 `json:"white_list"`
+}
+
+// NezhaConfig 探针配置
+type NezhaConfig struct {
+	URL       string `json:"url"`
+	Token     string `json:"token"`
+	MonitorID string `json:"monitor_id"`
 }
 
 var (

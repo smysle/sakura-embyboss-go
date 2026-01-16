@@ -503,6 +503,18 @@ func ProcessConfigInput(c tele.Context, action string) error {
 	var msg string
 	
 	switch action {
+	case "cfg_nezha":
+		// 解析探针配置：地址,Token,监控ID
+		parts := strings.Split(input, ",")
+		if len(parts) != 3 {
+			return c.Send("❌ 格式错误\n\n请按格式输入: `探针地址,API Token,监控ID`", tele.ModeMarkdown)
+		}
+		cfg.Nezha.URL = strings.TrimSpace(parts[0])
+		cfg.Nezha.Token = strings.TrimSpace(parts[1])
+		cfg.Nezha.MonitorID = strings.TrimSpace(parts[2])
+		success = true
+		msg = "探针配置已更新"
+		
 	case "cfg_line":
 		cfg.Emby.Line = input
 		success = true

@@ -53,6 +53,13 @@ func OnText(c tele.Context) error {
 		return HandleMoviePilotSearchInput(c)
 	case session.StateMoviePilotSelectMedia:
 		return HandleMPSelectDownload(c)
+	case session.StateWaitingInput:
+		// 配置面板输入处理
+		action := sessionMgr.GetStringAction(userID)
+		if action != "" {
+			return ProcessConfigInput(c, action)
+		}
+		return nil
 	default:
 		// 没有特殊状态，忽略消息
 		return nil

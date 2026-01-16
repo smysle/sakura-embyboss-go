@@ -135,6 +135,13 @@ func (b *Bot) registerHandlers() {
 	adminGroup.Handle("/deleted", handlers.Deleted)
 	adminGroup.Handle("/low_activity", handlers.LowActivity)
 
+	// 反皮套人命令
+	adminGroup.Handle("/unban_channel", handlers.UnbanChannel)
+	adminGroup.Handle("/white_channel", handlers.WhiteChannel)
+	adminGroup.Handle("/rev_white_channel", handlers.RevWhiteChannel)
+	adminGroup.Handle("/list_white_channels", handlers.ListWhiteChannels)
+	adminGroup.Handle("/anti_channel", handlers.ToggleAntiChannel)
+
 	// 批量媒体库控制命令
 	adminGroup.Handle("/embylibs_blockall", handlers.EmbyLibsBlockAll)
 	adminGroup.Handle("/embylibs_unblockall", handlers.EmbyLibsUnblockAll)
@@ -165,6 +172,9 @@ func (b *Bot) registerHandlers() {
 
 	// 取消命令
 	b.Handle("/cancel", handlers.Cancel)
+
+	// 群组成员变更事件（退群自动封禁）
+	b.Handle(tele.OnChatMember, handlers.OnChatMember)
 }
 
 // setCommands 设置命令列表
