@@ -900,17 +900,19 @@ func (c *Client) GetDeviceByID(deviceID string) (*DeviceInfo, error) {
 		return nil, fmt.Errorf("无法解析设备数据")
 	}
 
-	device := &DeviceInfo{
-		ID:         getString(data, "Id"),
-		DeviceName: getString(data, "Name"),
-		AppName:    getString(data, "AppName"),
-		AppVersion: getString(data, "AppVersion"),
+	lastActivity := getString(data, "DateLastActivity")
+	if lastActivity != "" {
+		// 解析并格式化时间
+		if t, err := time.Parse(time.RFC3339, lastActivity); err == nil {
+			lastActivity = t.Format("2006-01-02 15:04")
+		}
 	}
 
-	if lastUsed := getString(data, "DateLastActivity"); lastUsed != "" {
-		if t, err := time.Parse(time.RFC3339, lastUsed); err == nil {
-			device.LastActivityDate = &t
-		}
+	device := &DeviceInfo{
+		ID:               getString(data, "Id"),
+		DeviceName:       getString(data, "Name"),
+		AppName:          getString(data, "AppName"),
+		LastActivityDate: lastActivity,
 	}
 
 	return device, nil
@@ -924,12 +926,12 @@ func (c *Client) SetUserAdminPolicy(userID string, isAdmin bool) error {
 		return err
 	}
 
-	policy := c.createDefaultPolicy()
-	policy["IsAdministrator"] = isAdmin
+	isDisabled := false
 	if user.Policy != nil {
-		policy["IsDisabled"] = user.Policy.IsDisabled
-		policy["EnableAllFolders"] = user.Policy.EnableAllFolders
+		isDisabled = user.Policy.IsDisabled
 	}
+
+	policy := c.createPolicy(isAdmin, isDisabled, 2, nil)
 
 	result, err := c.request(http.MethodPost, "/emby/Users/"+userID+"/Policy", policy)
 	if err != nil || !result.Success {
@@ -1001,7 +1003,7 @@ func (c *Client) GetUserIPHistory(userID string, days int) ([]AuditResult, error
 		if len(row) >= 4 {
 			result := AuditResult{}
 			if v, ok := row[0].(string); ok {
-				result.IPAddress = v
+				result.RemoteAddress = v
 			}
 			if v, ok := row[1].(string); ok {
 				result.DeviceName = v
@@ -1011,7 +1013,7 @@ func (c *Client) GetUserIPHistory(userID string, days int) ([]AuditResult, error
 			}
 			if v, ok := row[3].(string); ok {
 				if t, err := time.Parse("2006-01-02 15:04:05", v); err == nil {
-					result.LastSeen = &t
+					result.LastActivity = t
 				}
 			}
 			results = append(results, result)
