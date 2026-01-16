@@ -274,7 +274,7 @@ func CallAll(c tele.Context) error {
 	)
 
 	if status != nil {
-		if err := c.Bot().Edit(status, resultText, tele.ModeMarkdown); err != nil {
+		if _, err := c.Bot().Edit(status, resultText, tele.ModeMarkdown); err != nil {
 			logger.Debug().Err(err).Msg("Edit status failed")
 		}
 	} else {
@@ -614,8 +614,8 @@ func LowActivity(c tele.Context) error {
 
 		// 如果超过不活跃天数，禁用账户
 		var lastActivity time.Time
-		if embyUser.LastActivityDate != nil {
-			lastActivity = *embyUser.LastActivityDate
+		if embyUser.LastSeen != nil {
+			lastActivity = *embyUser.LastSeen
 		} else if user.Ch != nil {
 			lastActivity = *user.Ch
 		}

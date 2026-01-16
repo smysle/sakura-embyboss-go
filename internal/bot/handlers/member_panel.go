@@ -3,7 +3,6 @@ package handlers
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	tele "gopkg.in/telebot.v3"

@@ -75,6 +75,8 @@ type OpenConfig struct {
 	InviteLevel   string `json:"invite_level"`
 	LeaveBan      bool   `json:"leave_ban"`
 	UserPlays     bool   `json:"user_plays"`
+	LowActivity   bool   `json:"low_activity"`
+	InactiveDays  int    `json:"inactive_days"`
 	CheckinReward []int  `json:"checkin_reward"`
 	ExchangeCost  int    `json:"exchange_cost"`
 	WhitelistCost int    `json:"whitelist_cost"`

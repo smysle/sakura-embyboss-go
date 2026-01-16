@@ -33,7 +33,7 @@ func editOrReply(c tele.Context, text string, opts ...interface{}) error {
 	if msg.Photo != nil || msg.Video != nil || msg.Document != nil || msg.Audio != nil {
 		// 媒体消息，使用 EditCaption
 		// 先更新 caption
-		if err := c.Bot().EditCaption(msg, text, opts...); err != nil {
+		if _, err := c.Bot().EditCaption(msg, text, opts...); err != nil {
 			// 如果编辑失败，尝试发送新消息
 			logger.Debug().Err(err).Msg("EditCaption failed, sending new message")
 			return c.Send(text, opts...)
