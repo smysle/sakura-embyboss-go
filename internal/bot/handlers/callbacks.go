@@ -494,13 +494,117 @@ func OnInlineQuery(c tele.Context) error {
 // handleMyPlays 我的观影
 func handleMyPlays(c tele.Context) error {
 	c.Respond(&tele.CallbackResponse{Text: "📈 获取观影记录..."})
-	return editOrReply(c, "📈 **我的观影**\n\n🚧 功能开发中...", keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
+
+	// 获取用户信息
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(c.Sender().ID)
+	if err != nil || user == nil {
+		return editOrReply(c, "❌ 未找到用户信息", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	if user.EmbyID == nil || *user.EmbyID == "" {
+		return editOrReply(c, "❌ 您还没有 Emby 账户", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	// 获取播放统计
+	client := emby.GetClient()
+	stats, err := client.GetUserPlaybackStats(*user.EmbyID, 30)
+	if err != nil {
+		logger.Error().Err(err).Str("embyID", *user.EmbyID).Msg("获取播放统计失败")
+		return editOrReply(c, "❌ 获取播放统计失败，请稍后重试", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	// 格式化时长
+	formatDuration := func(seconds int64) string {
+		hours := seconds / 3600
+		minutes := (seconds % 3600) / 60
+		if hours > 0 {
+			return fmt.Sprintf("%d小时%d分钟", hours, minutes)
+		}
+		return fmt.Sprintf("%d分钟", minutes)
+	}
+
+	userName := "未知"
+	if user.Name != nil {
+		userName = *user.Name
+	}
+
+	text := fmt.Sprintf(
+		"📈 **我的观影统计**\n\n"+
+			"👤 用户: `%s`\n"+
+			"📅 统计周期: 最近30天\n\n"+
+			"📊 **播放数据:**\n"+
+			"• 观看时长: %s\n"+
+			"• 播放次数: %d 次\n",
+		userName,
+		formatDuration(stats.TotalPlayTime),
+		stats.PlayCount,
+	)
+
+	// 添加最近观看的内容（如果有）
+	if len(stats.RecentItems) > 0 {
+		text += "\n🎬 **最近观看:**\n"
+		for i, item := range stats.RecentItems {
+			if i >= 5 {
+				break
+			}
+			text += fmt.Sprintf("• %s\n", item)
+		}
+	}
+
+	return editOrReply(c, text, keyboards.BackKeyboard("members"), tele.ModeMarkdown)
 }
 
 // handleMyFavorites 我的收藏
 func handleMyFavorites(c tele.Context) error {
 	c.Respond(&tele.CallbackResponse{Text: "⭐ 获取收藏..."})
-	return editOrReply(c, "⭐ **我的收藏**\n\n🚧 功能开发中...", keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
+
+	// 获取用户信息
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(c.Sender().ID)
+	if err != nil || user == nil {
+		return editOrReply(c, "❌ 未找到用户信息", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	if user.EmbyID == nil || *user.EmbyID == "" {
+		return editOrReply(c, "❌ 您还没有 Emby 账户", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	// 获取收藏列表
+	client := emby.GetClient()
+	favorites, err := client.GetUserFavorites(*user.EmbyID, 20)
+	if err != nil {
+		logger.Error().Err(err).Str("embyID", *user.EmbyID).Msg("获取收藏列表失败")
+		return editOrReply(c, "❌ 获取收藏列表失败，请稍后重试", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	userName := "未知"
+	if user.Name != nil {
+		userName = *user.Name
+	}
+
+	text := fmt.Sprintf(
+		"⭐ **我的收藏**\n\n"+
+			"👤 用户: `%s`\n"+
+			"📊 收藏数量: %d\n\n",
+		userName,
+		len(favorites),
+	)
+
+	if len(favorites) == 0 {
+		text += "_暂无收藏内容_"
+	} else {
+		text += "🎬 **收藏列表:**\n"
+		for i, item := range favorites {
+			if i >= 15 {
+				text += fmt.Sprintf("\n_...还有 %d 个收藏_", len(favorites)-15)
+				break
+			}
+			text += fmt.Sprintf("• %s\n", item.Name)
+		}
+	}
+
+	return editOrReply(c, text, keyboards.BackKeyboard("members"), tele.ModeMarkdown)
 }
 
 // handleAdminUsers 用户管理
@@ -622,7 +726,62 @@ func handleOwnerBackup(c tele.Context) error {
 // handleDevices 设备管理
 func handleDevices(c tele.Context) error {
 	c.Respond(&tele.CallbackResponse{Text: "📱 获取设备列表..."})
-	return editOrReply(c, "📱 **设备管理**\n\n🚧 功能开发中...", keyboards.BackKeyboard("account_info"), tele.ModeMarkdown)
+
+	// 获取用户信息
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(c.Sender().ID)
+	if err != nil || user == nil {
+		return editOrReply(c, "❌ 未找到用户信息", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	if user.EmbyID == nil || *user.EmbyID == "" {
+		return editOrReply(c, "❌ 您还没有 Emby 账户", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	// 获取设备列表
+	client := emby.GetClient()
+	devices, err := client.GetUserDevices(*user.EmbyID)
+	if err != nil {
+		logger.Error().Err(err).Str("embyID", *user.EmbyID).Msg("获取设备列表失败")
+		return editOrReply(c, "❌ 获取设备列表失败，请稍后重试", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	userName := "未知"
+	if user.Name != nil {
+		userName = *user.Name
+	}
+
+	text := fmt.Sprintf(
+		"📱 **我的设备**\n\n"+
+			"👤 用户: `%s`\n"+
+			"📊 在线设备: %d\n\n",
+		userName,
+		len(devices),
+	)
+
+	if len(devices) == 0 {
+		text += "_当前没有在线设备_"
+	} else {
+		text += "🖥️ **设备列表:**\n"
+		for i, device := range devices {
+			if i >= 10 {
+				text += fmt.Sprintf("\n_...还有 %d 个设备_", len(devices)-10)
+				break
+			}
+			lastSeen := "未知"
+			if device.LastSeen != nil {
+				lastSeen = device.LastSeen.Format("01-02 15:04")
+			}
+			text += fmt.Sprintf("• **%s** (%s)\n  └ 客户端: %s | 最后活跃: %s\n",
+				device.Name,
+				device.RemoteAddr,
+				device.Client,
+				lastSeen,
+			)
+		}
+	}
+
+	return editOrReply(c, text, keyboards.BackKeyboard("members"), tele.ModeMarkdown)
 }
 
 // handleChangeTG 换绑TG入口

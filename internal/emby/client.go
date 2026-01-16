@@ -652,6 +652,119 @@ func (c *Client) TerminateSession(sessionID, reason string) error {
 	return nil
 }
 
+// FavoriteItem 收藏项目
+type FavoriteItem struct {
+	ID       string
+	Name     string
+	Type     string
+	Year     int
+	ImageTag string
+}
+
+// GetUserFavorites 获取用户收藏列表
+func (c *Client) GetUserFavorites(userID string, limit int) ([]FavoriteItem, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	endpoint := fmt.Sprintf("/emby/Users/%s/Items?Filters=IsFavorite&Limit=%d&Recursive=true&SortBy=SortName&SortOrder=Ascending", userID, limit)
+	result, err := c.request(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if !result.Success {
+		return nil, fmt.Errorf("获取收藏失败: %s", result.Error)
+	}
+
+	data, ok := result.Data.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("响应格式错误")
+	}
+
+	items, ok := data["Items"].([]interface{})
+	if !ok {
+		return []FavoriteItem{}, nil
+	}
+
+	var favorites []FavoriteItem
+	for _, item := range items {
+		if itemMap, ok := item.(map[string]interface{}); ok {
+			fav := FavoriteItem{
+				ID:   getString(itemMap, "Id"),
+				Name: getString(itemMap, "Name"),
+				Type: getString(itemMap, "Type"),
+				Year: getInt(itemMap, "ProductionYear"),
+			}
+			favorites = append(favorites, fav)
+		}
+	}
+
+	return favorites, nil
+}
+
+// DeviceInfo 设备信息
+type DeviceInfo struct {
+	ID         string
+	Name       string
+	Client     string
+	LastSeen   *time.Time
+	RemoteAddr string
+}
+
+// GetUserDevices 获取用户的设备列表
+func (c *Client) GetUserDevices(userID string) ([]DeviceInfo, error) {
+	// 通过 Sessions 获取该用户的设备
+	result, err := c.request(http.MethodGet, "/emby/Sessions", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if !result.Success {
+		return nil, fmt.Errorf("获取会话失败: %s", result.Error)
+	}
+
+	sessions, ok := result.Data.([]interface{})
+	if !ok {
+		return []DeviceInfo{}, nil
+	}
+
+	var devices []DeviceInfo
+	seenDevices := make(map[string]bool)
+
+	for _, session := range sessions {
+		if sessionMap, ok := session.(map[string]interface{}); ok {
+			sessionUserID := getString(sessionMap, "UserId")
+			if sessionUserID != userID {
+				continue
+			}
+
+			deviceID := getString(sessionMap, "DeviceId")
+			if seenDevices[deviceID] {
+				continue
+			}
+			seenDevices[deviceID] = true
+
+			device := DeviceInfo{
+				ID:         deviceID,
+				Name:       getString(sessionMap, "DeviceName"),
+				Client:     getString(sessionMap, "Client"),
+				RemoteAddr: getString(sessionMap, "RemoteEndPoint"),
+			}
+
+			if lastSeen := getString(sessionMap, "LastActivityDate"); lastSeen != "" {
+				if t, err := time.Parse(time.RFC3339, lastSeen); err == nil {
+					device.LastSeen = &t
+				}
+			}
+
+			devices = append(devices, device)
+		}
+	}
+
+	return devices, nil
+}
+
 // 工具函数
 func getString(m map[string]interface{}, key string) string {
 	if v, ok := m[key].(string); ok {

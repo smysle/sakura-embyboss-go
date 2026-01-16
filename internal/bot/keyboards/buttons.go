@@ -251,10 +251,15 @@ func MembersPanelKeyboard(hasAccount bool, isAdmin bool) *tele.ReplyMarkup {
 			markup.Data("🔑 重置密码", "reset_pwd"),
 		))
 		rows = append(rows, markup.Row(
-			markup.Data("📚 媒体库管理", "embyblock"),
-			markup.Data("🏪 积分商城", "store"),
+			markup.Data("📈 我的观影", "my_plays"),
+			markup.Data("⭐ 我的收藏", "my_favorites"),
 		))
 		rows = append(rows, markup.Row(
+			markup.Data("📱 我的设备", "devices"),
+			markup.Data("📚 媒体库管理", "embyblock"),
+		))
+		rows = append(rows, markup.Row(
+			markup.Data("🏪 积分商城", "store"),
 			markup.Data("🗑️ 删除账户", "delme"),
 		))
 	} else {

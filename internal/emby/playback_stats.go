@@ -14,12 +14,14 @@ import (
 
 // PlaybackStats 播放统计
 type PlaybackStats struct {
-	UserID      string
-	UserName    string
-	PlayCount   int
-	TotalTime   int64 // 秒
-	LastPlayed  *time.Time
-	TopItems    []PlayedItem
+	UserID        string
+	UserName      string
+	PlayCount     int
+	TotalTime     int64 // 秒
+	TotalPlayTime int64 // 秒 (兼容别名)
+	LastPlayed    *time.Time
+	TopItems      []PlayedItem
+	RecentItems   []string // 最近播放的项目名称
 }
 
 // PlayedItem 播放的项目
@@ -84,7 +86,23 @@ func (c *Client) GetUserPlaybackStats(userID string, days int) (*PlaybackStats, 
 				}
 			}
 
-			// 收集播放项目
+			// 收集最近播放项目名称
+			if len(stats.RecentItems) < 10 {
+				itemName := getString(itemData, "Name")
+				itemType := getString(itemData, "Type")
+				if itemName != "" {
+					displayName := itemName
+					if itemType == "Episode" {
+						seriesName := getString(itemData, "SeriesName")
+						if seriesName != "" {
+							displayName = fmt.Sprintf("%s - %s", seriesName, itemName)
+						}
+					}
+					stats.RecentItems = append(stats.RecentItems, displayName)
+				}
+			}
+
+			// 收集播放项目（用于排行）
 			if len(stats.TopItems) < 5 {
 				stats.TopItems = append(stats.TopItems, PlayedItem{
 					ItemID:   getString(itemData, "Id"),
@@ -96,6 +114,7 @@ func (c *Client) GetUserPlaybackStats(userID string, days int) (*PlaybackStats, 
 	}
 
 	stats.PlayCount = playCount
+	stats.TotalPlayTime = stats.TotalTime // 兼容别名
 	return stats, nil
 }
 
