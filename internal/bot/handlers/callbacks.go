@@ -128,6 +128,18 @@ func OnCallback(c tele.Context) error {
 		return handleSetRenewInvite(c)
 	case "set_checkin_lv", "set_invite_lv":
 		return handleSetLevelMenu(c, action)
+	// 等级设置确认
+	case "do_set_checkin_lv", "do_set_invite_lv":
+		if len(parts) >= 2 {
+			return handleDoSetLevel(c, action, parts[1])
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	// 收藏功能
+	case "favorited":
+		if len(parts) >= 2 {
+			return handleFavorited(c, parts[1])
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
 	// 定时任务面板
 	case "schedall":
 		return handleSchedAll(c)
@@ -585,16 +597,165 @@ func handleSetLevel(c tele.Context, parts []string) error {
 
 // OnInlineQuery 内联查询处理器
 func OnInlineQuery(c tele.Context) error {
-	query := c.Query().Text
+	query := strings.TrimSpace(c.Query().Text)
+	userID := c.Sender().ID
 
-	// 内联查询功能暂时返回空结果
-	// 可以用于未来扩展：搜索电影、查询用户等
-	logger.Debug().Str("query", query).Msg("收到内联查询")
+	// 检查用户是否在群组中
+	cfg := config.Get()
+	if len(cfg.Groups) > 0 {
+		// 简单检查，实际环境可能需要更复杂的群成员验证
+		repo := repository.NewEmbyRepository()
+		user, _ := repo.GetByTG(userID)
+		if user == nil {
+			return c.Answer(&tele.QueryResponse{
+				Results: []tele.Result{
+					&tele.ArticleResult{
+						Title:       "未注册用户",
+						Description: "请先在Bot中注册",
+						Text:        "请先注册后使用搜索功能",
+					},
+				},
+				CacheTime: 60,
+			})
+		}
+	}
 
-	// 返回空结果
+	// 搜索词太短
+	if len(query) < 2 {
+		return c.Answer(&tele.QueryResponse{
+			Results: []tele.Result{
+				&tele.ArticleResult{
+					Title:       fmt.Sprintf("请输入至少两位字符"),
+					Description: fmt.Sprintf("本功能提供于%s用户搜索收藏Emby资源库中的电影、电视剧", cfg.Ranks.Logo),
+					Text:        "请输入至少两位字符进行搜索",
+				},
+			},
+			CacheTime: 30,
+		})
+	}
+
+	// 检查用户是否有 Emby 账户
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(userID)
+	if err != nil || user == nil || user.EmbyID == nil || *user.EmbyID == "" {
+		return c.Answer(&tele.QueryResponse{
+			Results: []tele.Result{
+				&tele.ArticleResult{
+					Title:       "未绑定账户",
+					Description: "未查询到您的Emby账户，请先注册",
+					Text:        "请先注册Emby账户后使用搜索功能",
+				},
+			},
+			CacheTime: 30,
+		})
+	}
+
+	// 执行搜索
+	client := emby.GetClient()
+	items, err := client.SearchMedia(query, 10, 0)
+	if err != nil {
+		logger.Error().Err(err).Str("query", query).Msg("Emby搜索失败")
+		return c.Answer(&tele.QueryResponse{
+			Results: []tele.Result{
+				&tele.ArticleResult{
+					Title:       "搜索失败",
+					Description: "请稍后重试",
+					Text:        "搜索失败，请稍后重试",
+				},
+			},
+			CacheTime: 10,
+		})
+	}
+
+	// 没有结果
+	if len(items) == 0 {
+		return c.Answer(&tele.QueryResponse{
+			Results: []tele.Result{
+				&tele.ArticleResult{
+					Title:       fmt.Sprintf("未找到: %s", query),
+					Description: "没有匹配的内容",
+					Text:        fmt.Sprintf("没有找到与 \"%s\" 匹配的内容", query),
+				},
+			},
+			CacheTime: 60,
+		})
+	}
+
+	// 构建搜索结果
+	var results []tele.Result
+	for _, item := range items {
+		typeIcon := "🎬"
+		if item.Type == "Series" {
+			typeIcon = "📺"
+		}
+
+		// 格式化时长
+		runtime := ""
+		if item.RunTime > 0 {
+			minutes := item.RunTime / 600000000 // Ticks to minutes
+			runtime = fmt.Sprintf("%d分钟", minutes)
+		}
+
+		// 格式化简介
+		overview := item.Overview
+		if len(overview) > 200 {
+			overview = overview[:200] + "..."
+		}
+
+		// 格式化类型
+		genres := ""
+		if len(item.Genres) > 0 {
+			genres = strings.Join(item.Genres, ", ")
+		}
+
+		// 获取 TMDB ID
+		tmdbID := ""
+		if id, ok := item.ProviderIds["Tmdb"]; ok {
+			tmdbID = id
+		}
+
+		// 构建消息文本
+		text := fmt.Sprintf(
+			"**%s《%s》**\n\n"+
+				"🧫**年份** | %d\n"+
+				"💠**类型** | %s\n"+
+				"⏱️**时长** | %s\n\n"+
+				"%s",
+			typeIcon, item.Name,
+			item.Year,
+			genres,
+			runtime,
+			overview,
+		)
+
+		// 创建内联键盘
+		replyMarkup := &tele.ReplyMarkup{}
+		var buttons []tele.Btn
+		if tmdbID != "" {
+			tmdbType := "movie"
+			if item.Type == "Series" {
+				tmdbType = "tv"
+			}
+			buttons = append(buttons, replyMarkup.URL("🍿 TMDB", fmt.Sprintf("https://www.themoviedb.org/%s/%s", tmdbType, tmdbID)))
+		}
+		buttons = append(buttons, replyMarkup.Data("💘 收藏", fmt.Sprintf("favorited|%s", item.ID)))
+		replyMarkup.Inline(replyMarkup.Row(buttons...))
+
+		result := &tele.ArticleResult{
+			Title:       fmt.Sprintf("%s %s (%d)", typeIcon, item.Name, item.Year),
+			Description: overview,
+			Text:        text,
+			ThumbURL:    client.GetImageURL(item.ID, "Primary", 330, 220),
+		}
+		result.SetReplyMarkup(replyMarkup)
+		result.SetParseMode(tele.ModeMarkdown)
+
+		results = append(results, result)
+	}
+
 	return c.Answer(&tele.QueryResponse{
-		Results:   []tele.Result{},
-		CacheTime: 60,
+		Results:   results,
+		CacheTime: 300,
 	})
 }
 

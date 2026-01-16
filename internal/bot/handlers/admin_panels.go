@@ -13,6 +13,7 @@ import (
 	"github.com/smysle/sakura-embyboss-go/internal/config"
 	"github.com/smysle/sakura-embyboss-go/internal/database/models"
 	"github.com/smysle/sakura-embyboss-go/internal/database/repository"
+	"github.com/smysle/sakura-embyboss-go/internal/emby"
 	"github.com/smysle/sakura-embyboss-go/internal/service"
 	"github.com/smysle/sakura-embyboss-go/pkg/logger"
 )
@@ -763,4 +764,81 @@ func handleWhitelistLineInput(c tele.Context, text string) error {
 	}
 
 	return c.Send("✅ 白名单用户线路已更新")
+}
+
+// handleDoSetLevel 处理等级设置
+func handleDoSetLevel(c tele.Context, action, level string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+
+	var targetField *string
+	var fieldName string
+
+	if strings.HasPrefix(action, "do_set_checkin") {
+		targetField = &cfg.Open.CheckinLevel
+		fieldName = "签到功能"
+	} else {
+		targetField = &cfg.Open.InviteLevel
+		fieldName = "邀请码兑换"
+	}
+
+	*targetField = level
+	if err := config.Save(); err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 保存配置失败", ShowAlert: true})
+	}
+
+	levelName := getLevelName(level)
+	c.Respond(&tele.CallbackResponse{Text: fmt.Sprintf("✅ %s等级已设置为: %s", fieldName, levelName)})
+	return handleSetRenew(c)
+}
+
+// getLevelName 获取等级名称 (用于显示)
+func getLevelName(lv string) string {
+	switch lv {
+	case "a":
+		return "🅰️ 白名单"
+	case "b":
+		return "🅱️ 普通用户"
+	case "c":
+		return "©️ 已禁用"
+	case "d":
+		return "🅳️ 所有用户"
+	default:
+		return lv
+	}
+}
+
+// handleFavorited 处理收藏回调
+func handleFavorited(c tele.Context, itemID string) error {
+	// 获取用户信息
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(c.Sender().ID)
+	if err != nil || user == nil {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 未找到用户信息", ShowAlert: true})
+	}
+
+	if user.EmbyID == nil || *user.EmbyID == "" {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您还没有 Emby 账户", ShowAlert: true})
+	}
+
+	// 调用 Emby API 添加收藏
+	client := emby.GetClient()
+	err = client.AddFavorite(*user.EmbyID, itemID)
+	if err != nil {
+		logger.Error().Err(err).Str("itemID", itemID).Msg("添加收藏失败")
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 收藏失败", ShowAlert: true})
+	}
+
+	// 获取媒体名称
+	itemName, _ := client.GetItemName(itemID)
+	if itemName == "" {
+		itemName = itemID
+	}
+
+	// 发送私信通知
+	c.Bot().Send(c.Sender(), fmt.Sprintf("💘 **%s** 收藏成功！", itemName), &tele.SendOptions{ParseMode: tele.ModeMarkdown})
+
+	return c.Respond(&tele.CallbackResponse{Text: fmt.Sprintf("💘 %s 收藏成功！", itemName), ShowAlert: true})
 }

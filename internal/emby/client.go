@@ -1023,3 +1023,124 @@ func (c *Client) GetUserIPHistory(userID string, days int) ([]AuditResult, error
 	return results, nil
 }
 
+// AddFavorite 添加收藏
+func (c *Client) AddFavorite(userID, itemID string) error {
+	url := fmt.Sprintf("%s/emby/Users/%s/FavoriteItems/%s", c.baseURL, userID, itemID)
+
+	resp, err := c.httpClient.R().
+		Post(url)
+
+	if err != nil {
+		return fmt.Errorf("添加收藏请求失败: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent {
+		return fmt.Errorf("添加收藏失败: HTTP %d", resp.StatusCode())
+	}
+
+	return nil
+}
+
+// RemoveFavorite 移除收藏
+func (c *Client) RemoveFavorite(userID, itemID string) error {
+	url := fmt.Sprintf("%s/emby/Users/%s/FavoriteItems/%s", c.baseURL, userID, itemID)
+
+	resp, err := c.httpClient.R().
+		Delete(url)
+
+	if err != nil {
+		return fmt.Errorf("移除收藏请求失败: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent {
+		return fmt.Errorf("移除收藏失败: HTTP %d", resp.StatusCode())
+	}
+
+	return nil
+}
+
+// GetItemName 获取媒体项目名称
+func (c *Client) GetItemName(itemID string) (string, error) {
+	url := fmt.Sprintf("%s/emby/Items/%s", c.baseURL, itemID)
+
+	resp, err := c.httpClient.R().
+		Get(url)
+
+	if err != nil {
+		return "", fmt.Errorf("获取项目信息失败: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return "", fmt.Errorf("获取项目信息失败: HTTP %d", resp.StatusCode())
+	}
+
+	var result struct {
+		Name string `json:"Name"`
+	}
+
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return "", fmt.Errorf("解析项目信息失败: %w", err)
+	}
+
+	return result.Name, nil
+}
+
+// SearchItem 搜索结果
+type SearchItem struct {
+	ID       string `json:"Id"`
+	Name     string `json:"Name"`
+	Type     string `json:"Type"`
+	Year     int    `json:"ProductionYear"`
+	Overview string `json:"Overview"`
+	Taglines []string `json:"Taglines"`
+	Genres   []string `json:"Genres"`
+	RunTime  int64  `json:"RunTimeTicks"`
+	Studios  []struct {
+		Name string `json:"Name"`
+	} `json:"Studios"`
+	ProviderIds map[string]string `json:"ProviderIds"`
+	DateCreated string `json:"DateCreated"`
+}
+
+// SearchMedia 搜索媒体
+func (c *Client) SearchMedia(query string, limit int, startIndex int) ([]SearchItem, error) {
+	url := fmt.Sprintf("%s/emby/Items", c.baseURL)
+
+	resp, err := c.httpClient.R().
+		SetQueryParams(map[string]string{
+			"SearchTerm":           query,
+			"IncludeItemTypes":     "Movie,Series",
+			"Recursive":            "true",
+			"Fields":               "Overview,Genres,ProviderIds,DateCreated,Studios,Taglines",
+			"Limit":                fmt.Sprintf("%d", limit),
+			"StartIndex":           fmt.Sprintf("%d", startIndex),
+			"SortBy":               "SortName",
+			"SortOrder":            "Ascending",
+		}).
+		Get(url)
+
+	if err != nil {
+		return nil, fmt.Errorf("搜索请求失败: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("搜索失败: HTTP %d", resp.StatusCode())
+	}
+
+	var result struct {
+		Items []SearchItem `json:"Items"`
+	}
+
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, fmt.Errorf("解析搜索结果失败: %w", err)
+	}
+
+	return result.Items, nil
+}
+
+// GetImageURL 获取媒体图片URL
+func (c *Client) GetImageURL(itemID string, imageType string, maxHeight, maxWidth int) string {
+	return fmt.Sprintf("%s/emby/Items/%s/Images/%s?maxHeight=%d&maxWidth=%d&quality=90",
+		c.baseURL, itemID, imageType, maxHeight, maxWidth)
+}
+
