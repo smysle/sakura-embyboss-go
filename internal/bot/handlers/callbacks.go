@@ -235,7 +235,7 @@ func OnCallback(c tele.Context) error {
 		return handleBindTG(c)
 	case "noop":
 		return c.Respond()
-	case "cfg_export_log", "cfg_nezha", "cfg_line", "cfg_whitelist_line", "cfg_block_libs", "cfg_mp":
+	case "cfg_nezha", "cfg_line", "cfg_whitelist_line", "cfg_block_libs":
 		return handleConfigCallback(c, action, parts)
 	case "cfg_toggle", "cfg_set", "cfg_mp_toggle", "cfg_mp_set":
 		return handleConfigCallback(c, action, parts)
@@ -984,8 +984,9 @@ func handleAdminCheckEx(c tele.Context) error {
 	
 	// 直接执行到期检测
 	go func() {
-		svc := service.NewExpirationService()
-		result, err := svc.CheckAndProcess()
+		svc := service.NewExpiryService()
+		svc.SetBot(c.Bot())
+		result, err := svc.CheckExpired()
 		if err != nil {
 			c.Send("❌ 到期检测失败: " + err.Error())
 			return
@@ -994,13 +995,13 @@ func handleAdminCheckEx(c tele.Context) error {
 		text := fmt.Sprintf(
 			"✅ **到期检测完成**\n\n"+
 				"📊 检测用户数: %d\n"+
-				"⚠️ 即将到期: %d\n"+
-				"🚫 已到期并处理: %d\n"+
+				"⚠️ 已过期: %d\n"+
+				"🚫 成功禁用: %d\n"+
 				"❌ 处理失败: %d",
-			result.TotalChecked,
-			result.ExpiringSoon,
-			result.ExpiredProcessed,
-			result.FailedCount,
+			result.Checked,
+			result.Expired,
+			result.Disabled,
+			result.Failed,
 		)
 		c.Send(text, tele.ModeMarkdown)
 	}()
@@ -1450,7 +1451,7 @@ func handleUserGift(c tele.Context, tgIDStr string) error {
 	// 生成注册码
 	codeRepo := repository.NewCodeRepository()
 	code := service.GenerateCode()
-	days := cfg.OpenDays // 默认天数
+	days := cfg.Open.Temp // 默认天数
 	if days <= 0 {
 		days = 30
 	}
@@ -1458,8 +1459,7 @@ func handleUserGift(c tele.Context, tgIDStr string) error {
 	if err := codeRepo.Create(&models.Code{
 		Code: code,
 		Us:   days,
-		Used: false,
-		Cr:   c.Sender().ID,
+		TG:   c.Sender().ID, // 创建者 TG ID
 	}); err != nil {
 		return c.Respond(&tele.CallbackResponse{Text: "❌ 生成注册码失败", ShowAlert: true})
 	}

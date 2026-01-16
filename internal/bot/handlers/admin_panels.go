@@ -512,7 +512,11 @@ func handleCfgSetLine(c tele.Context, action string) error {
 		prompt = "请输入普通用户线路信息：\n\n当前：\n" + cfg.Emby.Line
 	} else {
 		state = session.StateWaitingWhitelistLine
-		prompt = "请输入白名单用户线路信息：\n\n当前：\n" + cfg.Emby.WhitelistLine
+		wlLine := ""
+		if cfg.Emby.WhitelistLine != nil {
+			wlLine = *cfg.Emby.WhitelistLine
+		}
+		prompt = "请输入白名单用户线路信息：\n\n当前：\n" + wlLine
 	}
 
 	session.Set(c.Sender().ID, state, nil)
@@ -670,7 +674,7 @@ func handleCodeCreateInput(c tele.Context, text string) error {
 
 	// 生成注册码
 	codeSvc := service.NewCodeService()
-	codes, err := codeSvc.GenerateCodes(c.Sender().ID, days, count)
+	result, err := codeSvc.GenerateCodes(c.Sender().ID, days, count)
 	if err != nil {
 		return c.Send(fmt.Sprintf("❌ 生成注册码失败: %s", err.Error()))
 	}
@@ -679,7 +683,7 @@ func handleCodeCreateInput(c tele.Context, text string) error {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("🎟️ **生成 %d 个注册码成功**\n\n", count))
 	sb.WriteString(fmt.Sprintf("有效期：%d 天\n\n", days))
-	for i, code := range codes {
+	for i, code := range result.Codes {
 		sb.WriteString(fmt.Sprintf("%d. `%s`\n", i+1, code))
 	}
 
