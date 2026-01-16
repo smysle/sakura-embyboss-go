@@ -25,7 +25,12 @@ func UnbanChannel(c tele.Context) error {
 	}
 
 	cfg := config.Get()
-	chat := &tele.Chat{ID: cfg.GroupID}
+	
+	// 获取主群组
+	if len(cfg.Groups) == 0 {
+		return c.Send("❌ 未配置群组")
+	}
+	chat := &tele.Chat{ID: cfg.Groups[0]}
 
 	// 解封频道
 	member := &tele.ChatMember{
@@ -115,8 +120,10 @@ func RevWhiteChannel(c tele.Context) error {
 	}
 
 	// 可选：封禁该频道
-	chat := &tele.Chat{ID: cfg.GroupID}
-	c.Bot().Ban(chat, &tele.ChatMember{User: &tele.User{ID: channelID}})
+	if len(cfg.Groups) > 0 {
+		chat := &tele.Chat{ID: cfg.Groups[0]}
+		c.Bot().Ban(chat, &tele.ChatMember{User: &tele.User{ID: channelID}})
+	}
 
 	logger.Info().Int64("channel", channelID).Int64("admin", c.Sender().ID).Msg("移除频道白名单并封禁")
 	return c.Send(fmt.Sprintf("✅ 已将频道 `%d` 从白名单移除并封禁", channelID), tele.ModeMarkdown)
