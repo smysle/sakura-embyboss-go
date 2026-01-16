@@ -198,6 +198,25 @@ func (r *EmbyRepository) GetUsersExpiringInDays(days int) ([]models.Emby, error)
 	return embies, err
 }
 
+// GetAllWithEmby 获取所有有 Emby 账户的用户
+func (r *EmbyRepository) GetAllWithEmby() ([]models.Emby, error) {
+	var embies []models.Emby
+	err := r.db.Where("embyid IS NOT NULL AND embyid != ''").Find(&embies).Error
+	return embies, err
+}
+
+// GetAllWithName 获取所有有用户名的用户
+func (r *EmbyRepository) GetAllWithName() ([]models.Emby, error) {
+	var embies []models.Emby
+	err := r.db.Where("name IS NOT NULL AND name != ''").Find(&embies).Error
+	return embies, err
+}
+
+// DeleteByTG 根据 TG ID 删除用户（别名）
+func (r *EmbyRepository) DeleteByTG(tg int64) error {
+	return r.Delete(tg)
+}
+
 // GetInactiveUsers 获取超过指定天数未活跃的用户
 func (r *EmbyRepository) GetInactiveUsers(inactiveDays int) ([]models.Emby, error) {
 	var embies []models.Emby

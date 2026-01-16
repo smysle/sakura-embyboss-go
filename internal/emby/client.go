@@ -852,3 +852,172 @@ func getInt(m map[string]interface{}, key string) int {
 	}
 	return 0
 }
+
+// AuthenticateUser 验证用户登录
+// 返回: (embyID, error)
+func (c *Client) AuthenticateUser(username, password string) (string, error) {
+	data := map[string]string{
+		"Username": username,
+	}
+	if password != "" && password != "None" {
+		data["Pw"] = password
+	}
+
+	result, err := c.request(http.MethodPost, "/emby/Users/AuthenticateByName", data)
+	if err != nil {
+		return "", fmt.Errorf("认证请求失败: %v", err)
+	}
+
+	if !result.Success {
+		return "", fmt.Errorf("认证失败: %s", result.Error)
+	}
+
+	respData, ok := result.Data.(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("无法解析认证响应")
+	}
+
+	// 从响应中获取用户信息
+	if user, ok := respData["User"].(map[string]interface{}); ok {
+		if id, ok := user["Id"].(string); ok {
+			return id, nil
+		}
+	}
+
+	return "", fmt.Errorf("认证响应中无用户ID")
+}
+
+// GetDeviceByID 通过设备ID获取设备详情
+func (c *Client) GetDeviceByID(deviceID string) (*DeviceInfo, error) {
+	endpoint := fmt.Sprintf("/emby/Devices/Info?Id=%s&api_key=%s", deviceID, c.apiKey)
+	result, err := c.request(http.MethodGet, endpoint, nil)
+	if err != nil || !result.Success {
+		return nil, fmt.Errorf("获取设备信息失败: %v", result.Error)
+	}
+
+	data, ok := result.Data.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("无法解析设备数据")
+	}
+
+	device := &DeviceInfo{
+		ID:         getString(data, "Id"),
+		DeviceName: getString(data, "Name"),
+		AppName:    getString(data, "AppName"),
+		AppVersion: getString(data, "AppVersion"),
+	}
+
+	if lastUsed := getString(data, "DateLastActivity"); lastUsed != "" {
+		if t, err := time.Parse(time.RFC3339, lastUsed); err == nil {
+			device.LastActivityDate = &t
+		}
+	}
+
+	return device, nil
+}
+
+// SetUserAdminPolicy 设置用户管理员权限
+func (c *Client) SetUserAdminPolicy(userID string, isAdmin bool) error {
+	// 先获取用户当前策略
+	user, err := c.GetUser(userID)
+	if err != nil {
+		return err
+	}
+
+	policy := c.createDefaultPolicy()
+	policy["IsAdministrator"] = isAdmin
+	if user.Policy != nil {
+		policy["IsDisabled"] = user.Policy.IsDisabled
+		policy["EnableAllFolders"] = user.Policy.EnableAllFolders
+	}
+
+	result, err := c.request(http.MethodPost, "/emby/Users/"+userID+"/Policy", policy)
+	if err != nil || !result.Success {
+		return fmt.Errorf("设置管理员权限失败: %v", result.Error)
+	}
+
+	return nil
+}
+
+// ExecuteCustomQuery 执行自定义SQL查询（需要 user_usage_stats 插件）
+func (c *Client) ExecuteCustomQuery(sql string, replaceUserID bool) ([][]interface{}, error) {
+	endpoint := fmt.Sprintf("/emby/user_usage_stats/submit_custom_query?api_key=%s", c.apiKey)
+	
+	data := map[string]interface{}{
+		"CustomQueryString": sql,
+		"ReplaceUserId":     replaceUserID,
+	}
+
+	result, err := c.request(http.MethodPost, endpoint, data)
+	if err != nil || !result.Success {
+		return nil, fmt.Errorf("执行自定义查询失败: %v", result.Error)
+	}
+
+	respData, ok := result.Data.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("无法解析查询响应")
+	}
+
+	results, ok := respData["results"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("查询结果格式错误")
+	}
+
+	var rows [][]interface{}
+	for _, row := range results {
+		if rowData, ok := row.([]interface{}); ok {
+			rows = append(rows, rowData)
+		}
+	}
+
+	return rows, nil
+}
+
+// GetUserIPHistory 获取用户的IP和设备历史
+func (c *Client) GetUserIPHistory(userID string, days int) ([]AuditResult, error) {
+	sql := fmt.Sprintf(`
+		SELECT DISTINCT 
+			RemoteEndPoint as ip_address,
+			DeviceName as device_name,
+			ClientName as client_name,
+			MAX(DateCreated) as last_seen
+		FROM PlaybackActivity 
+		WHERE UserId = '%s' 
+		AND DateCreated >= date('now', '-%d days')
+		GROUP BY RemoteEndPoint, DeviceName, ClientName
+		ORDER BY last_seen DESC
+		LIMIT 50
+	`, userID, days)
+
+	rows, err := c.ExecuteCustomQuery(sql, true)
+	if err != nil {
+		// 如果插件不可用，返回空结果
+		logger.Warn().Err(err).Msg("执行用户IP历史查询失败，可能缺少 user_usage_stats 插件")
+		return nil, nil
+	}
+
+	var results []AuditResult
+	for _, row := range rows {
+		if len(row) >= 4 {
+			result := AuditResult{}
+			if v, ok := row[0].(string); ok {
+				result.IPAddress = v
+			}
+			if v, ok := row[1].(string); ok {
+				result.DeviceName = v
+			}
+			if v, ok := row[2].(string); ok {
+				result.ClientName = v
+			}
+			if v, ok := row[3].(string); ok {
+				if t, err := time.Parse("2006-01-02 15:04:05", v); err == nil {
+					result.LastSeen = &t
+				}
+			}
+			results = append(results, result)
+		}
+	}
+
+	return results, nil
+}
+

@@ -336,7 +336,11 @@ func StoreKeyboard() *tele.ReplyMarkup {
 			markup.Data("⭐ 白名单", "store_whitelist"),
 		),
 		markup.Row(
+			markup.Data("🎫 邀请码", "store_invite"),
 			markup.Data("🔓 解封账户", "store_reborn"),
+		),
+		markup.Row(
+			markup.Data("📋 查询我的码", "store_query"),
 		),
 		markup.Row(
 			markup.Data("« 返回", "members"),

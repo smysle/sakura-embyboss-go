@@ -89,6 +89,102 @@ func handleDelMe(c tele.Context) error {
 	return editOrReply(c, text, keyboards.BackKeyboard("members"), tele.ModeMarkdown)
 }
 
+// handleStoreInvite 兑换邀请码
+func handleStoreInvite(c tele.Context) error {
+	cfg := config.Get()
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(c.Sender().ID)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "⚠️ 数据库没有你", ShowAlert: true})
+	}
+
+	// 检查等级权限
+	if !cfg.Open.Invite {
+		return c.Respond(&tele.CallbackResponse{Text: "邀请码兑换功能未开启", ShowAlert: true})
+	}
+
+	// 检查用户等级
+	inviteLevel := cfg.Open.InviteLevel
+	if inviteLevel != "" && string(user.Lv) > inviteLevel {
+		return c.Respond(&tele.CallbackResponse{Text: "您的等级无权兑换邀请码", ShowAlert: true})
+	}
+
+	cost := cfg.Open.InviteCost
+	if user.Iv < cost {
+		return c.Respond(&tele.CallbackResponse{
+			Text:      fmt.Sprintf("积分不足，至少需要 %d %s", cost, cfg.Money),
+			ShowAlert: true,
+		})
+	}
+
+	c.Respond(&tele.CallbackResponse{Text: "🎫 兑换邀请码"})
+
+	// 进入邀请码兑换会话
+	sessionMgr := session.GetManager()
+	sessionMgr.SetState(c.Sender().ID, session.StateWaitingInviteInfo)
+
+	text := fmt.Sprintf(
+		"**🎫 兑换邀请码**\n\n"+
+			"您当前积分: **%d**\n"+
+			"基础费率: %d %s/30天\n\n"+
+			"请输入兑换信息，格式:\n"+
+			"`[类型] [数量]`\n\n"+
+			"类型说明:\n"+
+			"• `mon` - 月卡 (30天)\n"+
+			"• `sea` - 季卡 (90天)\n"+
+			"• `half` - 半年卡 (180天)\n"+
+			"• `year` - 年卡 (365天)\n\n"+
+			"例如: `mon 2` 表示兑换2张月卡\n\n"+
+			"_发送 /cancel 取消操作_",
+		user.Iv, cost, cfg.Money,
+	)
+
+	return editOrReply(c, text, nil, tele.ModeMarkdown)
+}
+
+// handleStoreQuery 查询我的注册码
+func handleStoreQuery(c tele.Context) error {
+	c.Respond(&tele.CallbackResponse{Text: "📋 查询注册码"})
+
+	codeRepo := repository.NewCodeRepository()
+	codes, err := codeRepo.GetByCreator(c.Sender().ID)
+	if err != nil || len(codes) == 0 {
+		return editOrReply(c, "📋 您还没有创建过注册码", keyboards.BackKeyboard("store"))
+	}
+
+	var sb strings.Builder
+	sb.WriteString("**📋 我的注册码**\n\n")
+
+	usedCount := 0
+	unusedCount := 0
+	for _, code := range codes {
+		if code.UsedBy != nil {
+			usedCount++
+		} else {
+			unusedCount++
+		}
+	}
+
+	sb.WriteString(fmt.Sprintf("已使用: %d 个 | 未使用: %d 个\n\n", usedCount, unusedCount))
+
+	// 显示未使用的码（最多10个）
+	count := 0
+	for _, code := range codes {
+		if code.UsedBy == nil && count < 10 {
+			sb.WriteString(fmt.Sprintf("`%s` (%d天)\n", code.Code, code.Days))
+			count++
+		}
+	}
+
+	if count == 0 {
+		sb.WriteString("_暂无未使用的注册码_\n")
+	} else if unusedCount > 10 {
+		sb.WriteString(fmt.Sprintf("\n... 还有 %d 个未显示", unusedCount-10))
+	}
+
+	return editOrReply(c, sb.String(), keyboards.BackKeyboard("store"), tele.ModeMarkdown)
+}
+
 // handleConfirmDelMe 确认删除账户
 func handleConfirmDelMe(c tele.Context, embyID string) error {
 	repo := repository.NewEmbyRepository()

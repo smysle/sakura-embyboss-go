@@ -146,6 +146,10 @@ func OnCallback(c tele.Context) error {
 		return handleStoreWhitelist(c)
 	case "store_reborn":
 		return handleStoreReborn(c)
+	case "store_invite":
+		return handleStoreInvite(c)
+	case "store_query":
+		return handleStoreQuery(c)
 	case "embyblock":
 		return handleEmbyBlock(c)
 	case "emby_block":

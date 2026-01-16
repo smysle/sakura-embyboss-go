@@ -33,6 +33,9 @@ const (
 
 	// 配置面板相关状态
 	StateWaitingInput State = "waiting_input" // 等待用户输入（配置面板通用）
+
+	// 邀请码兑换相关状态
+	StateWaitingInviteInfo State = "waiting_invite_info" // 等待输入邀请码兑换信息
 )
 
 // ActionType 操作类型（用于安全码验证后的操作）

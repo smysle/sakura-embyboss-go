@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -60,6 +61,8 @@ func OnText(c tele.Context) error {
 			return ProcessConfigInput(c, action)
 		}
 		return nil
+	case session.StateWaitingInviteInfo:
+		return handleInviteInfoInput(c, text)
 	default:
 		// 没有特殊状态，忽略消息
 		return nil
@@ -512,8 +515,18 @@ func handleBindTGInfoInput(c tele.Context, input string) error {
 		return c.Send("❌ 未找到该Emby账户")
 	}
 
-	// TODO: 验证密码（需要Emby API支持）
-	// 这里暂时跳过密码验证，直接绑定
+	// 验证密码
+	embyID, err := client.AuthenticateUser(embyName, password)
+	if err != nil {
+		sessionMgr.ClearSession(userID)
+		logger.Warn().Err(err).Str("name", embyName).Msg("Emby密码验证失败")
+		return c.Send("❌ 账户密码不符\n\n请确认用户名和密码正确")
+	}
+
+	// 确保获取到的ID一致
+	if embyID != embyUser.ID {
+		logger.Warn().Str("auth_id", embyID).Str("query_id", embyUser.ID).Msg("EmbyID不一致")
+	}
 
 	// 生成安全码
 	securityCode, _ := utils.GenerateNumericCode(4)
@@ -590,4 +603,88 @@ func isValidSecurityCode(code string) bool {
 		}
 	}
 	return true
+}
+
+// handleInviteInfoInput 处理邀请码兑换输入
+func handleInviteInfoInput(c tele.Context, input string) error {
+	userID := c.Sender().ID
+	sessionMgr := session.GetManager()
+
+	// 解析输入: [类型] [数量]
+	parts := strings.Fields(input)
+	if len(parts) < 2 {
+		return c.Send("❌ 格式错误\n\n请输入 `[类型] [数量]`\n例如: `mon 2`", tele.ModeMarkdown)
+	}
+
+	typeStr := strings.ToLower(parts[0])
+	countStr := parts[1]
+
+	// 解析天数
+	var days int
+	switch typeStr {
+	case "mon":
+		days = 30
+	case "sea":
+		days = 90
+	case "half":
+		days = 180
+	case "year":
+		days = 365
+	default:
+		return c.Send("❌ 无效的类型\n\n可选: mon(30天), sea(90天), half(180天), year(365天)")
+	}
+
+	// 解析数量
+	count, err := strconv.Atoi(countStr)
+	if err != nil || count <= 0 || count > 10 {
+		return c.Send("❌ 无效的数量 (1-10)")
+	}
+
+	cfg := config.Get()
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(userID)
+	if err != nil {
+		sessionMgr.ClearSession(userID)
+		return c.Send("❌ 获取用户信息失败")
+	}
+
+	// 计算费用: (days * count / 30) * base_cost
+	cost := (days * count / 30) * cfg.Open.InviteCost
+	if user.Iv < cost {
+		sessionMgr.ClearSession(userID)
+		return c.Send(fmt.Sprintf("❌ 积分不足\n\n需要: %d %s\n您有: %d %s", cost, cfg.Money, user.Iv, cfg.Money))
+	}
+
+	// 扣除积分
+	newIV := user.Iv - cost
+	if err := repo.UpdateFields(userID, map[string]interface{}{"iv": newIV}); err != nil {
+		sessionMgr.ClearSession(userID)
+		return c.Send("❌ 扣除积分失败")
+	}
+
+	// 生成注册码
+	codeService := service.NewCodeService()
+	codes, err := codeService.GenerateCodes(userID, days, count)
+	if err != nil {
+		// 回滚积分
+		repo.UpdateFields(userID, map[string]interface{}{"iv": user.Iv})
+		sessionMgr.ClearSession(userID)
+		return c.Send(fmt.Sprintf("❌ 生成注册码失败: %s", err.Error()))
+	}
+
+	sessionMgr.ClearSession(userID)
+
+	var sb strings.Builder
+	sb.WriteString("**✅ 兑换成功**\n\n")
+	sb.WriteString(fmt.Sprintf("类型: %s (%d天)\n", typeStr, days))
+	sb.WriteString(fmt.Sprintf("数量: %d 个\n", count))
+	sb.WriteString(fmt.Sprintf("消耗: %d %s\n", cost, cfg.Money))
+	sb.WriteString(fmt.Sprintf("剩余: %d %s\n\n", newIV, cfg.Money))
+	sb.WriteString("**注册码列表:**\n")
+	for i, code := range codes {
+		sb.WriteString(fmt.Sprintf("%d. `%s`\n", i+1, code))
+	}
+	sb.WriteString(fmt.Sprintf("\n💡 使用: t.me/%s?start=注册码", cfg.BotName))
+
+	return c.Send(sb.String(), keyboards.BackKeyboard("store"), tele.ModeMarkdown)
 }

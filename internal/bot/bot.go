@@ -142,6 +142,13 @@ func (b *Bot) registerHandlers() {
 	adminGroup.Handle("/list_white_channels", handlers.ListWhiteChannels)
 	adminGroup.Handle("/anti_channel", handlers.ToggleAntiChannel)
 
+	// 批量管理扩展命令
+	adminGroup.Handle("/kick_not_emby", handlers.KickNotEmby)
+	adminGroup.Handle("/scan_embyname", handlers.ScanEmbyName)
+	adminGroup.Handle("/only_rm_emby", handlers.OnlyRmEmby)
+	adminGroup.Handle("/only_rm_record", handlers.OnlyRmRecord)
+	adminGroup.Handle("/embyadmin", handlers.EmbyAdmin)
+
 	// 批量媒体库控制命令
 	adminGroup.Handle("/embylibs_blockall", handlers.EmbyLibsBlockAll)
 	adminGroup.Handle("/embylibs_unblockall", handlers.EmbyLibsUnblockAll)
@@ -160,6 +167,7 @@ func (b *Bot) registerHandlers() {
 	ownerGroup.Handle("/unbanall", handlers.UnbanAll)
 	ownerGroup.Handle("/paolu", handlers.Paolu)
 	ownerGroup.Handle("/coinsclear", handlers.CoinsClear)
+	ownerGroup.Handle("/restore_from_db", handlers.RestoreFromDB)
 
 	// 回调查询
 	b.Handle(tele.OnCallback, handlers.OnCallback)
