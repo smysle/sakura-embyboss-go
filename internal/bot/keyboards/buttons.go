@@ -218,6 +218,48 @@ func UserLevelKeyboard(userTG int64) *tele.ReplyMarkup {
 	return markup
 }
 
+// UserManageKeyboard 用户管理键盘（包含额外媒体库控制）
+func UserManageKeyboard(userTG int64, hasExtraLibs bool, extraLibsEnabled bool) *tele.ReplyMarkup {
+	cfg := config.Get()
+	markup := &tele.ReplyMarkup{}
+
+	var rows []tele.Row
+
+	// 等级设置行
+	rows = append(rows, markup.Row(
+		markup.Data("🌟 白名单 (A)", fmt.Sprintf("set_lv:%d:a", userTG)),
+		markup.Data("🔮 高级 (B)", fmt.Sprintf("set_lv:%d:b", userTG)),
+	))
+	rows = append(rows, markup.Row(
+		markup.Data("💎 普通 (C)", fmt.Sprintf("set_lv:%d:c", userTG)),
+		markup.Data("🎫 基础 (D)", fmt.Sprintf("set_lv:%d:d", userTG)),
+	))
+	rows = append(rows, markup.Row(
+		markup.Data("🚫 封禁 (E)", fmt.Sprintf("set_lv:%d:e", userTG)),
+	))
+
+	// 额外媒体库控制（如果配置了额外库）
+	if hasExtraLibs && len(cfg.Emby.ExtraLibs) > 0 {
+		if extraLibsEnabled {
+			rows = append(rows, markup.Row(
+				markup.Data("🎬 关闭额外媒体库", fmt.Sprintf("embyextralib_block|%d", userTG)),
+			))
+		} else {
+			rows = append(rows, markup.Row(
+				markup.Data("🎬 开启额外媒体库", fmt.Sprintf("embyextralib_unblock|%d", userTG)),
+			))
+		}
+	}
+
+	// 返回按钮
+	rows = append(rows, markup.Row(
+		markup.Data("« 返回", "back_kk"),
+	))
+
+	markup.Inline(rows...)
+	return markup
+}
+
 // CodeDaysKeyboard 注册码天数选择键盘
 func CodeDaysKeyboard() *tele.ReplyMarkup {
 	markup := &tele.ReplyMarkup{}

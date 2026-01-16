@@ -109,6 +109,12 @@ func (s *Scheduler) registerJobs() {
 		s.cron.Every(1).Week().Sunday().At("23:00").Do(s.generateWeekPlayRanks)
 		logger.Info().Msg("已注册: 用户周播放榜任务 (每周日 23:00)")
 	}
+
+	// 收藏同步 - 每 4 小时
+	if cfg.SyncFavorites {
+		s.cron.Every(4).Hours().Do(s.syncFavorites)
+		logger.Info().Msg("已注册: 收藏同步任务 (每 4 小时)")
+	}
 }
 
 // AddJob 添加自定义任务
@@ -337,8 +343,28 @@ func (s *Scheduler) RunNow(taskName string) error {
 		s.checkLowActivity()
 	case "backup":
 		s.backupDatabase()
+	case "sync_favorites":
+		s.syncFavorites()
 	default:
 		logger.Warn().Str("task", taskName).Msg("未知任务")
 	}
 	return nil
+}
+
+// syncFavorites 同步收藏到数据库
+func (s *Scheduler) syncFavorites() {
+	logger.Info().Msg("执行定时任务: 同步收藏")
+
+	favSvc := service.NewFavoritesService()
+	result, err := favSvc.SyncAllUserFavorites()
+	if err != nil {
+		logger.Error().Err(err).Msg("同步收藏失败")
+		return
+	}
+
+	logger.Info().
+		Int("users", result.Users).
+		Int("items", result.Items).
+		Int("errors", result.Errors).
+		Msg("收藏同步完成")
 }

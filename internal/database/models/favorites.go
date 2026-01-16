@@ -9,7 +9,8 @@ import (
 type Favorites struct {
 	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
 	TG        int64     `gorm:"column:tg;index" json:"tg"`
-	EmbyID    string    `gorm:"column:emby_id;size:255" json:"emby_id"`
+	EmbyID    string    `gorm:"column:embyid;size:255;index" json:"embyid"`
+	EmbyName  string    `gorm:"column:embyname;size:255" json:"embyname"`
 	ItemID    string    `gorm:"column:item_id;size:255" json:"item_id"`
 	ItemName  string    `gorm:"column:item_name;size:500" json:"item_name"`
 	ItemType  string    `gorm:"column:item_type;size:50" json:"item_type"`

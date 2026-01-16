@@ -135,6 +135,12 @@ func (b *Bot) registerHandlers() {
 	adminGroup.Handle("/deleted", handlers.Deleted)
 	adminGroup.Handle("/low_activity", handlers.LowActivity)
 
+	// 批量媒体库控制命令
+	adminGroup.Handle("/embylibs_blockall", handlers.EmbyLibsBlockAll)
+	adminGroup.Handle("/embylibs_unblockall", handlers.EmbyLibsUnblockAll)
+	adminGroup.Handle("/extraembylibs_blockall", handlers.ExtraEmbyLibsBlockAll)
+	adminGroup.Handle("/extraembylibs_unblockall", handlers.ExtraEmbyLibsUnblockAll)
+
 	// Owner 命令
 	ownerGroup := b.Group()
 	ownerGroup.Use(middleware.OwnerOnly())

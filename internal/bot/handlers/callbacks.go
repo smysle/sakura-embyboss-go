@@ -168,6 +168,34 @@ func OnCallback(c tele.Context) error {
 		return handleBindTG(c)
 	case "noop":
 		return c.Respond()
+	case "owner_config":
+		return showConfigPanel(c)
+	case "cfg_export_log", "cfg_nezha", "cfg_line", "cfg_whitelist_line", "cfg_block_libs", "cfg_mp":
+		return handleConfigCallback(c, action, parts)
+	case "cfg_toggle", "cfg_set", "cfg_mp_toggle", "cfg_mp_set":
+		return handleConfigCallback(c, action, parts)
+	// 额外媒体库管理员控制
+	case "embyextralib_unblock":
+		if len(parts) >= 2 {
+			return handleExtraLibToggle(c, parts[1], true)
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	case "embyextralib_block":
+		if len(parts) >= 2 {
+			return handleExtraLibToggle(c, parts[1], false)
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	// 分页回调
+	case "users_page":
+		return handleUsersPage(c, parts)
+	case "whitelist_page":
+		return handleWhitelistPage(c, parts)
+	case "favorites_page":
+		return handleFavoritesPage(c, parts)
+	case "devices_page":
+		return handleDevicesPage(c, parts)
+	case "codes_page":
+		return handleCodesPage(c, parts)
 	default:
 		// 检查是否是 changetg_xxx_xxx 格式（管理员审核）
 		if strings.HasPrefix(data, "changetg_") || strings.HasPrefix(data, "nochangetg_") {

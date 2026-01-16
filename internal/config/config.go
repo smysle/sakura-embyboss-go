@@ -91,13 +91,14 @@ type RanksConfig struct {
 
 // SchedulerConfig 定时任务配置
 type SchedulerConfig struct {
-	DayRank      bool `json:"day_rank"`
-	WeekRank     bool `json:"week_rank"`
-	DayPlayRank  bool `json:"day_play_rank"`
-	WeekPlayRank bool `json:"week_play_rank"`
-	CheckExpired bool `json:"check_expired"`
-	LowActivity  bool `json:"low_activity"`
-	BackupDB     bool `json:"backup_db"`
+	DayRank       bool `json:"day_rank"`
+	WeekRank      bool `json:"week_rank"`
+	DayPlayRank   bool `json:"day_play_rank"`
+	WeekPlayRank  bool `json:"week_play_rank"`
+	CheckExpired  bool `json:"check_expired"`
+	LowActivity   bool `json:"low_activity"`
+	BackupDB      bool `json:"backup_db"`
+	SyncFavorites bool `json:"sync_favorites"` // 同步收藏到数据库
 
 	// 运行时状态（不序列化）
 	DayRanksMsgID  int64 `json:"-"`

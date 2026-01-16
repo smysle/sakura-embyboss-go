@@ -574,6 +574,43 @@ func (c *Client) ShowFolders(userID string, folderNames []string) error {
 	return fmt.Errorf("无法更新用户策略")
 }
 
+// DisableAllLibraries 禁用用户所有媒体库
+func (c *Client) DisableAllLibraries(userID string) error {
+	result, err := c.request(http.MethodGet, "/emby/Users/"+userID, nil)
+	if err != nil || !result.Success {
+		return err
+	}
+
+	userData := result.Data.(map[string]interface{})
+	if policy, ok := userData["Policy"].(map[string]interface{}); ok {
+		policy["EnableAllFolders"] = false
+		policy["EnabledFolders"] = []string{}
+		_, err = c.request(http.MethodPost, "/emby/Users/"+userID+"/Policy", policy)
+		return err
+	}
+
+	return fmt.Errorf("无法更新用户策略")
+}
+
+// EnableAllLibraries 启用用户所有媒体库
+func (c *Client) EnableAllLibraries(userID string) error {
+	result, err := c.request(http.MethodGet, "/emby/Users/"+userID, nil)
+	if err != nil || !result.Success {
+		return err
+	}
+
+	userData := result.Data.(map[string]interface{})
+	if policy, ok := userData["Policy"].(map[string]interface{}); ok {
+		policy["EnableAllFolders"] = true
+		policy["EnabledFolders"] = []string{}
+		policy["BlockedMediaFolders"] = []string{}
+		_, err = c.request(http.MethodPost, "/emby/Users/"+userID+"/Policy", policy)
+		return err
+	}
+
+	return fmt.Errorf("无法更新用户策略")
+}
+
 // GetMediaCounts 获取媒体统计
 func (c *Client) GetMediaCounts() (*MediaCounts, error) {
 	endpoint := fmt.Sprintf("/emby/Items/Counts?api_key=%s", c.apiKey)
@@ -661,30 +698,32 @@ type FavoriteItem struct {
 	ImageTag string
 }
 
-// GetUserFavorites 获取用户收藏列表
-func (c *Client) GetUserFavorites(userID string, limit int) ([]FavoriteItem, error) {
+// GetUserFavorites 获取用户收藏列表（分页版本）
+func (c *Client) GetUserFavorites(userID string, offset, limit int) ([]FavoriteItem, int, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 
-	endpoint := fmt.Sprintf("/emby/Users/%s/Items?Filters=IsFavorite&Limit=%d&Recursive=true&SortBy=SortName&SortOrder=Ascending", userID, limit)
+	endpoint := fmt.Sprintf("/emby/Users/%s/Items?Filters=IsFavorite&StartIndex=%d&Limit=%d&Recursive=true&SortBy=SortName&SortOrder=Ascending", userID, offset, limit)
 	result, err := c.request(http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if !result.Success {
-		return nil, fmt.Errorf("获取收藏失败: %s", result.Error)
+		return nil, 0, fmt.Errorf("获取收藏失败: %s", result.Error)
 	}
 
 	data, ok := result.Data.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("响应格式错误")
+		return nil, 0, fmt.Errorf("响应格式错误")
 	}
+
+	totalCount := getInt(data, "TotalRecordCount")
 
 	items, ok := data["Items"].([]interface{})
 	if !ok {
-		return []FavoriteItem{}, nil
+		return []FavoriteItem{}, 0, nil
 	}
 
 	var favorites []FavoriteItem
@@ -700,36 +739,42 @@ func (c *Client) GetUserFavorites(userID string, limit int) ([]FavoriteItem, err
 		}
 	}
 
-	return favorites, nil
+	return favorites, totalCount, nil
+}
+
+// GetUserFavoritesSimple 获取用户收藏列表（简单版本，不分页）
+func (c *Client) GetUserFavoritesSimple(userID string, limit int) ([]FavoriteItem, error) {
+	favorites, _, err := c.GetUserFavorites(userID, 0, limit)
+	return favorites, err
 }
 
 // DeviceInfo 设备信息
 type DeviceInfo struct {
-	ID         string
-	Name       string
-	Client     string
-	LastSeen   *time.Time
-	RemoteAddr string
+	ID               string
+	DeviceName       string
+	AppName          string
+	LastActivityDate string
+	RemoteAddr       string
 }
 
-// GetUserDevices 获取用户的设备列表
-func (c *Client) GetUserDevices(userID string) ([]DeviceInfo, error) {
+// GetUserDevices 获取用户的设备列表（分页版本）
+func (c *Client) GetUserDevices(userID string, offset, limit int) ([]DeviceInfo, int, error) {
 	// 通过 Sessions 获取该用户的设备
 	result, err := c.request(http.MethodGet, "/emby/Sessions", nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if !result.Success {
-		return nil, fmt.Errorf("获取会话失败: %s", result.Error)
+		return nil, 0, fmt.Errorf("获取会话失败: %s", result.Error)
 	}
 
 	sessions, ok := result.Data.([]interface{})
 	if !ok {
-		return []DeviceInfo{}, nil
+		return []DeviceInfo{}, 0, nil
 	}
 
-	var devices []DeviceInfo
+	var allDevices []DeviceInfo
 	seenDevices := make(map[string]bool)
 
 	for _, session := range sessions {
@@ -745,24 +790,45 @@ func (c *Client) GetUserDevices(userID string) ([]DeviceInfo, error) {
 			}
 			seenDevices[deviceID] = true
 
-			device := DeviceInfo{
-				ID:         deviceID,
-				Name:       getString(sessionMap, "DeviceName"),
-				Client:     getString(sessionMap, "Client"),
-				RemoteAddr: getString(sessionMap, "RemoteEndPoint"),
-			}
-
-			if lastSeen := getString(sessionMap, "LastActivityDate"); lastSeen != "" {
-				if t, err := time.Parse(time.RFC3339, lastSeen); err == nil {
-					device.LastSeen = &t
+			lastActivity := getString(sessionMap, "LastActivityDate")
+			if lastActivity != "" {
+				// 解析并格式化时间
+				if t, err := time.Parse(time.RFC3339, lastActivity); err == nil {
+					lastActivity = t.Format("2006-01-02 15:04")
 				}
 			}
 
-			devices = append(devices, device)
+			device := DeviceInfo{
+				ID:               deviceID,
+				DeviceName:       getString(sessionMap, "DeviceName"),
+				AppName:          getString(sessionMap, "Client"),
+				LastActivityDate: lastActivity,
+				RemoteAddr:       getString(sessionMap, "RemoteEndPoint"),
+			}
+
+			allDevices = append(allDevices, device)
 		}
 	}
 
-	return devices, nil
+	total := len(allDevices)
+
+	// 应用分页
+	if offset >= len(allDevices) {
+		return []DeviceInfo{}, total, nil
+	}
+
+	end := offset + limit
+	if end > len(allDevices) {
+		end = len(allDevices)
+	}
+
+	return allDevices[offset:end], total, nil
+}
+
+// GetUserDevicesSimple 获取用户的设备列表（简单版本）
+func (c *Client) GetUserDevicesSimple(userID string) ([]DeviceInfo, error) {
+	devices, _, err := c.GetUserDevices(userID, 0, 100)
+	return devices, err
 }
 
 // 工具函数

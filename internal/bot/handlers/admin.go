@@ -86,7 +86,31 @@ func showUserInfo(c tele.Context, user *models.Emby) error {
 		user.Iv,
 	)
 
-	return c.Send(text, keyboards.UserLevelKeyboard(user.TG), tele.ModeMarkdown)
+	// 检查是否配置了额外媒体库
+	hasExtraLibs := len(cfg.Emby.ExtraLibs) > 0
+
+	// 检查用户额外媒体库状态
+	extraLibsEnabled := false
+	if hasExtraLibs && user.EmbyID != nil && *user.EmbyID != "" {
+		client := emby.GetClient()
+		if embyUser, err := client.GetUser(*user.EmbyID); err == nil && embyUser.Policy != nil {
+			// 如果额外库不在阻止列表中，则认为已启用
+			extraLibsEnabled = true
+			for _, blocked := range embyUser.Policy.BlockedFolders {
+				for _, extraLib := range cfg.Emby.ExtraLibs {
+					if blocked == extraLib {
+						extraLibsEnabled = false
+						break
+					}
+				}
+				if !extraLibsEnabled {
+					break
+				}
+			}
+		}
+	}
+
+	return c.Send(text, keyboards.UserManageKeyboard(user.TG, hasExtraLibs, extraLibsEnabled), tele.ModeMarkdown)
 }
 
 func getEmbyID(id *string) string {

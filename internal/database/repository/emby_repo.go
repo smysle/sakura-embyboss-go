@@ -207,3 +207,49 @@ func (r *EmbyRepository) GetInactiveUsers(inactiveDays int) ([]models.Emby, erro
 	).Find(&embies).Error
 	return embies, err
 }
+
+// ListWithPagination 分页获取用户列表
+func (r *EmbyRepository) ListWithPagination(page, pageSize int, filter string) ([]models.Emby, int64, error) {
+	var embies []models.Emby
+	var total int64
+
+	query := r.db.Model(&models.Emby{})
+
+	// 根据 filter 添加条件
+	switch filter {
+	case "whitelist":
+		query = query.Where("lv = ?", models.LevelA)
+	case "banned":
+		query = query.Where("lv = ?", models.LevelE)
+	case "with_emby":
+		query = query.Where("embyid IS NOT NULL AND embyid != ''")
+	case "expired":
+		query = query.Where("ex IS NOT NULL AND ex < NOW() AND lv != ?", models.LevelE)
+	}
+
+	// 计算总数
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 分页查询
+	offset := (page - 1) * pageSize
+	err := query.Order("tg DESC").Offset(offset).Limit(pageSize).Find(&embies).Error
+	return embies, total, err
+}
+
+// GetWhitelistUsers 获取白名单用户（分页）
+func (r *EmbyRepository) GetWhitelistUsers(page, pageSize int) ([]models.Emby, int64, error) {
+	var embies []models.Emby
+	var total int64
+
+	query := r.db.Model(&models.Emby{}).Where("lv = ?", models.LevelA)
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := query.Order("tg DESC").Offset(offset).Limit(pageSize).Find(&embies).Error
+	return embies, total, err
+}

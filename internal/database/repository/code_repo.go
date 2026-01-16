@@ -150,3 +150,50 @@ func (r *CodeRepository) DeleteAllUnused(tgID *int64) (int64, error) {
 	result := query.Delete(&models.Code{})
 	return result.RowsAffected, result.Error
 }
+
+// ListWithPagination 分页获取注册码列表
+func (r *CodeRepository) ListWithPagination(page, pageSize int, filter string) ([]CodeInfo, int64, error) {
+	var codes []models.Code
+	var total int64
+
+	query := r.db.Model(&models.Code{})
+
+	// 根据 filter 添加条件
+	switch filter {
+	case "used":
+		query = query.Where("used IS NOT NULL")
+	case "unused":
+		query = query.Where("used IS NULL")
+	}
+
+	// 计算总数
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 分页查询
+	offset := (page - 1) * pageSize
+	err := query.Order("id DESC").Offset(offset).Limit(pageSize).Find(&codes).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 转换为 CodeInfo
+	var infos []CodeInfo
+	for _, c := range codes {
+		infos = append(infos, CodeInfo{
+			Code: c.Code,
+			Days: c.Us,
+			Used: c.Used != nil,
+		})
+	}
+
+	return infos, total, nil
+}
+
+// CodeInfo 注册码信息（用于显示）
+type CodeInfo struct {
+	Code string
+	Days int
+	Used bool
+}
