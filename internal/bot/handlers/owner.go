@@ -17,8 +17,9 @@ import (
 	"github.com/smysle/sakura-embyboss-go/pkg/logger"
 )
 
-// Config /config 配置面板
-func Config(c tele.Context) error {
+// OwnerConfig 显示系统配置信息（旧版本，保留兼容）
+// 新版本配置面板使用 config_panel.go 中的 Config 函数
+func OwnerConfig(c tele.Context) error {
 	cfg := config.Get()
 
 	text := fmt.Sprintf(

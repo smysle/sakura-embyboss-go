@@ -168,8 +168,6 @@ func OnCallback(c tele.Context) error {
 		return handleBindTG(c)
 	case "noop":
 		return c.Respond()
-	case "owner_config":
-		return showConfigPanel(c)
 	case "cfg_export_log", "cfg_nezha", "cfg_line", "cfg_whitelist_line", "cfg_block_libs", "cfg_mp":
 		return handleConfigCallback(c, action, parts)
 	case "cfg_toggle", "cfg_set", "cfg_mp_toggle", "cfg_mp_set":
@@ -600,7 +598,7 @@ func handleMyFavorites(c tele.Context) error {
 
 	// 获取收藏列表
 	client := emby.GetClient()
-	favorites, err := client.GetUserFavorites(*user.EmbyID, 20)
+	favorites, err := client.GetUserFavoritesSimple(*user.EmbyID, 20)
 	if err != nil {
 		logger.Error().Err(err).Str("embyID", *user.EmbyID).Msg("获取收藏列表失败")
 		return editOrReply(c, "❌ 获取收藏列表失败，请稍后重试", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
@@ -737,8 +735,8 @@ func handleOwnerConfig(c tele.Context) error {
 	if !cfg.IsOwner(c.Sender().ID) {
 		return c.Respond(&tele.CallbackResponse{Text: "❌ 仅 Owner 可用", ShowAlert: true})
 	}
-	c.Respond(&tele.CallbackResponse{Text: "⚙️ 请使用 /config 命令", ShowAlert: true})
-	return nil
+	c.Respond()
+	return showConfigPanel(c)
 }
 
 // handleOwnerBackup 备份数据库
@@ -768,7 +766,7 @@ func handleDevices(c tele.Context) error {
 
 	// 获取设备列表
 	client := emby.GetClient()
-	devices, err := client.GetUserDevices(*user.EmbyID)
+	devices, err := client.GetUserDevicesSimple(*user.EmbyID)
 	if err != nil {
 		logger.Error().Err(err).Str("embyID", *user.EmbyID).Msg("获取设备列表失败")
 		return editOrReply(c, "❌ 获取设备列表失败，请稍后重试", keyboards.BackKeyboard("members"), tele.ModeMarkdown)

@@ -30,6 +30,9 @@ const (
 	StateMoviePilotSearch      State = "moviepilot_search"       // 等待输入搜索关键词
 	StateMoviePilotSelectMedia State = "moviepilot_select_media" // 等待选择媒体
 	StateMoviePilotConfirm     State = "moviepilot_confirm"      // 等待确认下载
+
+	// 配置面板相关状态
+	StateWaitingInput State = "waiting_input" // 等待用户输入（配置面板通用）
 )
 
 // ActionType 操作类型（用于安全码验证后的操作）
