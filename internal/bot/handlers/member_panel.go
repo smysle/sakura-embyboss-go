@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tele "gopkg.in/telebot.v3"
@@ -158,7 +159,7 @@ func handleStoreQuery(c tele.Context) error {
 	usedCount := 0
 	unusedCount := 0
 	for _, code := range codes {
-		if code.UsedBy != nil {
+		if code.Used != nil {
 			usedCount++
 		} else {
 			unusedCount++
@@ -170,8 +171,8 @@ func handleStoreQuery(c tele.Context) error {
 	// 显示未使用的码（最多10个）
 	count := 0
 	for _, code := range codes {
-		if code.UsedBy == nil && count < 10 {
-			sb.WriteString(fmt.Sprintf("`%s` (%d天)\n", code.Code, code.Days))
+		if code.Used == nil && count < 10 {
+			sb.WriteString(fmt.Sprintf("`%s` (%d天)\n", code.Code, code.Us))
 			count++
 		}
 	}

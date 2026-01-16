@@ -193,7 +193,15 @@ func (r *CodeRepository) ListWithPagination(page, pageSize int, filter string) (
 
 // CodeInfo 注册码信息（用于显示）
 type CodeInfo struct {
-	Code string
-	Days int
-	Used bool
+	Code   string
+	Days   int
+	Used   bool
+	UsedBy *int64
+}
+
+// GetByCreator 获取某用户创建的所有注册码
+func (r *CodeRepository) GetByCreator(tgID int64) ([]models.Code, error) {
+	var codes []models.Code
+	err := r.db.Where("tg = ?", tgID).Order("id DESC").Find(&codes).Error
+	return codes, err
 }

@@ -49,8 +49,6 @@ func KickNotEmby(c tele.Context) error {
 		return c.Send("❌ 未配置群组")
 	}
 
-	chat := &tele.Chat{ID: cfg.Groups[0]}
-	
 	// 获取群组成员（这里简化处理，实际需要分页获取）
 	// telebot v3 不直接支持获取所有成员，需要通过其他方式
 	// 这里返回提示信息
@@ -314,12 +312,4 @@ func EmbyAdmin(c tele.Context) error {
 	}()
 
 	return nil
-}
-
-// 辅助函数
-func getSecurityCode(pwd2 *string) string {
-	if pwd2 != nil {
-		return *pwd2
-	}
-	return "未设置"
 }

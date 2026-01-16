@@ -664,7 +664,7 @@ func handleInviteInfoInput(c tele.Context, input string) error {
 
 	// 生成注册码
 	codeService := service.NewCodeService()
-	codes, err := codeService.GenerateCodes(userID, days, count)
+	result, err := codeService.GenerateCodes(userID, days, count)
 	if err != nil {
 		// 回滚积分
 		repo.UpdateFields(userID, map[string]interface{}{"iv": user.Iv})
@@ -681,7 +681,7 @@ func handleInviteInfoInput(c tele.Context, input string) error {
 	sb.WriteString(fmt.Sprintf("消耗: %d %s\n", cost, cfg.Money))
 	sb.WriteString(fmt.Sprintf("剩余: %d %s\n\n", newIV, cfg.Money))
 	sb.WriteString("**注册码列表:**\n")
-	for i, code := range codes {
+	for i, code := range result.Codes {
 		sb.WriteString(fmt.Sprintf("%d. `%s`\n", i+1, code))
 	}
 	sb.WriteString(fmt.Sprintf("\n💡 使用: t.me/%s?start=注册码", cfg.BotName))
