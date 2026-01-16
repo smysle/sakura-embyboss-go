@@ -219,11 +219,29 @@ func UserLevelKeyboard(userTG int64) *tele.ReplyMarkup {
 }
 
 // UserManageKeyboard 用户管理键盘（包含额外媒体库控制）
-func UserManageKeyboard(userTG int64, hasExtraLibs bool, extraLibsEnabled bool) *tele.ReplyMarkup {
+func UserManageKeyboard(userTG int64, hasExtraLibs bool, extraLibsEnabled bool, isBanned bool, hasEmby bool) *tele.ReplyMarkup {
 	cfg := config.Get()
 	markup := &tele.ReplyMarkup{}
 
 	var rows []tele.Row
+
+	// 封禁/解封按钮
+	if isBanned {
+		rows = append(rows, markup.Row(
+			markup.Data("🌟 解除禁用", fmt.Sprintf("user_unban|%d", userTG)),
+		))
+	} else if hasEmby {
+		rows = append(rows, markup.Row(
+			markup.Data("💢 禁用账户", fmt.Sprintf("user_ban|%d", userTG)),
+		))
+	}
+
+	// 删除账户按钮（仅有Emby账户时显示）
+	if hasEmby {
+		rows = append(rows, markup.Row(
+			markup.Data("⚠️ 删除账户", fmt.Sprintf("user_delete|%d", userTG)),
+		))
+	}
 
 	// 等级设置行
 	rows = append(rows, markup.Row(
@@ -239,7 +257,7 @@ func UserManageKeyboard(userTG int64, hasExtraLibs bool, extraLibsEnabled bool) 
 	))
 
 	// 额外媒体库控制（如果配置了额外库）
-	if hasExtraLibs && len(cfg.Emby.ExtraLibs) > 0 {
+	if hasExtraLibs && len(cfg.Emby.ExtraLibs) > 0 && hasEmby {
 		if extraLibsEnabled {
 			rows = append(rows, markup.Row(
 				markup.Data("🎬 关闭额外媒体库", fmt.Sprintf("embyextralib_block|%d", userTG)),
@@ -251,9 +269,21 @@ func UserManageKeyboard(userTG int64, hasExtraLibs bool, extraLibsEnabled bool) 
 		}
 	}
 
-	// 返回按钮
+	// 赠送资格按钮（无Emby账户时显示）
+	if !hasEmby {
+		rows = append(rows, markup.Row(
+			markup.Data("✨ 赠送资格", fmt.Sprintf("user_gift|%d", userTG)),
+		))
+	}
+
+	// 踢出并封禁
 	rows = append(rows, markup.Row(
-		markup.Data("« 返回", "back_kk"),
+		markup.Data("🚫 踢出并封禁", fmt.Sprintf("user_kick|%d", userTG)),
+	))
+
+	// 关闭按钮
+	rows = append(rows, markup.Row(
+		markup.Data("❌ 关闭", "close"),
 	))
 
 	markup.Inline(rows...)

@@ -97,6 +97,19 @@ func (s *CodeService) generateCodeString(prefix string) string {
 	return fmt.Sprintf("%s-%s", prefix, randomPart[:12])
 }
 
+// GenerateCode 生成单个注册码字符串（公开方法）
+func GenerateCode() string {
+	cfg := config.Get()
+	prefix := cfg.Ranks.Logo
+	if prefix == "" {
+		prefix = "SAKURA"
+	}
+	bytes := make([]byte, 8)
+	rand.Read(bytes)
+	randomPart := strings.ToUpper(hex.EncodeToString(bytes))
+	return fmt.Sprintf("%s-%s", prefix, randomPart[:12])
+}
+
 // UseCodeResult 使用注册码结果
 type UseCodeResult struct {
 	Success    bool

@@ -13,6 +13,7 @@ import (
 	"github.com/smysle/sakura-embyboss-go/internal/bot/keyboards"
 	"github.com/smysle/sakura-embyboss-go/internal/bot/session"
 	"github.com/smysle/sakura-embyboss-go/internal/config"
+	"github.com/smysle/sakura-embyboss-go/internal/database/models"
 	"github.com/smysle/sakura-embyboss-go/internal/database/repository"
 	"github.com/smysle/sakura-embyboss-go/internal/emby"
 	"github.com/smysle/sakura-embyboss-go/internal/service"
@@ -198,6 +199,32 @@ func OnCallback(c tele.Context) error {
 		return handleDevicesPage(c, parts)
 	case "codes_page":
 		return handleCodesPage(c, parts)
+	// /kk 面板的用户管理按钮
+	case "user_ban":
+		if len(parts) >= 2 {
+			return handleUserBan(c, parts[1])
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	case "user_unban":
+		if len(parts) >= 2 {
+			return handleUserUnban(c, parts[1])
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	case "user_delete":
+		if len(parts) >= 2 {
+			return handleUserDelete(c, parts[1])
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	case "user_gift":
+		if len(parts) >= 2 {
+			return handleUserGift(c, parts[1])
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	case "user_kick":
+		if len(parts) >= 2 {
+			return handleUserKick(c, parts[1])
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
 	default:
 		// 检查是否是 changetg_xxx_xxx 格式（管理员审核）
 		if strings.HasPrefix(data, "changetg_") || strings.HasPrefix(data, "nochangetg_") {
@@ -703,33 +730,82 @@ func handleAdminStats(c tele.Context) error {
 	return editOrReply(c, text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
 }
 
-// handleAdminCheckEx 到期检测
+// handleAdminCheckEx 到期检测 - 直接执行
 func handleAdminCheckEx(c tele.Context) error {
 	cfg := config.Get()
 	if !cfg.IsAdmin(c.Sender().ID) {
 		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
 	}
-	c.Respond(&tele.CallbackResponse{Text: "🔍 请使用 /check_ex 命令", ShowAlert: true})
+	c.Respond(&tele.CallbackResponse{Text: "🔍 正在执行到期检测..."})
+	
+	// 直接执行到期检测
+	go func() {
+		svc := service.NewExpirationService()
+		result, err := svc.CheckAndProcess()
+		if err != nil {
+			c.Send("❌ 到期检测失败: " + err.Error())
+			return
+		}
+		
+		text := fmt.Sprintf(
+			"✅ **到期检测完成**\n\n"+
+				"📊 检测用户数: %d\n"+
+				"⚠️ 即将到期: %d\n"+
+				"🚫 已到期并处理: %d\n"+
+				"❌ 处理失败: %d",
+			result.TotalChecked,
+			result.ExpiringSoon,
+			result.ExpiredProcessed,
+			result.FailedCount,
+		)
+		c.Send(text, tele.ModeMarkdown)
+	}()
 	return nil
 }
 
-// handleAdminDayRanks 日榜
+// handleAdminDayRanks 日榜 - 直接执行
 func handleAdminDayRanks(c tele.Context) error {
 	cfg := config.Get()
 	if !cfg.IsAdmin(c.Sender().ID) {
 		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
 	}
-	c.Respond(&tele.CallbackResponse{Text: "📈 请使用 /days_ranks 命令", ShowAlert: true})
+	c.Respond(&tele.CallbackResponse{Text: "📈 正在生成日榜..."})
+	
+	// 直接执行日榜生成
+	go func() {
+		leaderboardSvc := service.NewLeaderboardService()
+		imgPath, err := leaderboardSvc.GenerateDailyRank()
+		if err != nil {
+			logger.Error().Err(err).Msg("生成日榜失败")
+			c.Send("❌ 生成日榜失败: " + err.Error())
+			return
+		}
+		photo := &tele.Photo{File: tele.FromDisk(imgPath)}
+		c.Send(photo)
+	}()
 	return nil
 }
 
-// handleAdminWeekRanks 周榜
+// handleAdminWeekRanks 周榜 - 直接执行
 func handleAdminWeekRanks(c tele.Context) error {
 	cfg := config.Get()
 	if !cfg.IsAdmin(c.Sender().ID) {
 		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
 	}
-	c.Respond(&tele.CallbackResponse{Text: "📊 请使用 /week_ranks 命令", ShowAlert: true})
+	c.Respond(&tele.CallbackResponse{Text: "📊 正在生成周榜..."})
+	
+	// 直接执行周榜生成
+	go func() {
+		leaderboardSvc := service.NewLeaderboardService()
+		imgPath, err := leaderboardSvc.GenerateWeeklyRank()
+		if err != nil {
+			logger.Error().Err(err).Msg("生成周榜失败")
+			c.Send("❌ 生成周榜失败: " + err.Error())
+			return
+		}
+		photo := &tele.Photo{File: tele.FromDisk(imgPath)}
+		c.Send(photo)
+	}()
 	return nil
 }
 
@@ -999,4 +1075,201 @@ func formatExpiryTime(ex *time.Time) string {
 		return "永久"
 	}
 	return ex.Format("2006-01-02 15:04:05")
+}
+
+// handleUserBan 禁用用户 Emby 账户
+func handleUserBan(c tele.Context, tgIDStr string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+
+	tgID, err := strconv.ParseInt(tgIDStr, 10, 64)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "无效的用户ID"})
+	}
+
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(tgID)
+	if err != nil || user.EmbyID == nil {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 用户不存在或无Emby账户", ShowAlert: true})
+	}
+
+	// 在 Emby 中禁用用户
+	client := emby.GetClient()
+	if err := client.DisableUser(*user.EmbyID); err != nil {
+		logger.Error().Err(err).Int64("tg", tgID).Msg("禁用Emby用户失败")
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 禁用失败: " + err.Error(), ShowAlert: true})
+	}
+
+	// 更新数据库等级为 e
+	if err := repo.UpdateFields(tgID, map[string]interface{}{"lv": "e"}); err != nil {
+		logger.Error().Err(err).Int64("tg", tgID).Msg("更新用户等级失败")
+	}
+
+	c.Respond(&tele.CallbackResponse{Text: "✅ 用户已禁用", ShowAlert: true})
+	return c.Edit(fmt.Sprintf("✅ 用户 %d 的 Emby 账户已禁用", tgID))
+}
+
+// handleUserUnban 解除禁用用户 Emby 账户
+func handleUserUnban(c tele.Context, tgIDStr string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+
+	tgID, err := strconv.ParseInt(tgIDStr, 10, 64)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "无效的用户ID"})
+	}
+
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(tgID)
+	if err != nil || user.EmbyID == nil {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 用户不存在或无Emby账户", ShowAlert: true})
+	}
+
+	// 在 Emby 中启用用户
+	client := emby.GetClient()
+	if err := client.EnableUser(*user.EmbyID); err != nil {
+		logger.Error().Err(err).Int64("tg", tgID).Msg("启用Emby用户失败")
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 解除禁用失败: " + err.Error(), ShowAlert: true})
+	}
+
+	// 更新数据库等级为 b
+	if err := repo.UpdateFields(tgID, map[string]interface{}{"lv": "b"}); err != nil {
+		logger.Error().Err(err).Int64("tg", tgID).Msg("更新用户等级失败")
+	}
+
+	c.Respond(&tele.CallbackResponse{Text: "✅ 用户已解除禁用", ShowAlert: true})
+	return c.Edit(fmt.Sprintf("✅ 用户 %d 的 Emby 账户已解除禁用", tgID))
+}
+
+// handleUserDelete 删除用户 Emby 账户
+func handleUserDelete(c tele.Context, tgIDStr string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+
+	tgID, err := strconv.ParseInt(tgIDStr, 10, 64)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "无效的用户ID"})
+	}
+
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(tgID)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 用户不存在", ShowAlert: true})
+	}
+
+	// 删除 Emby 账户
+	if user.EmbyID != nil && *user.EmbyID != "" {
+		client := emby.GetClient()
+		if err := client.DeleteUser(*user.EmbyID); err != nil {
+			logger.Error().Err(err).Int64("tg", tgID).Msg("删除Emby用户失败")
+			return c.Respond(&tele.CallbackResponse{Text: "❌ 删除Emby账户失败: " + err.Error(), ShowAlert: true})
+		}
+	}
+
+	// 清空数据库记录（保留 TG 记录，清空 Emby 相关字段）
+	if err := repo.UpdateFields(tgID, map[string]interface{}{
+		"emby_id": nil,
+		"name":    nil,
+		"pwd":     nil,
+		"pwd2":    nil,
+		"lv":      "d",
+	}); err != nil {
+		logger.Error().Err(err).Int64("tg", tgID).Msg("清空用户数据失败")
+	}
+
+	c.Respond(&tele.CallbackResponse{Text: "✅ 用户账户已删除", ShowAlert: true})
+	return c.Edit(fmt.Sprintf("✅ 用户 %d 的 Emby 账户已删除", tgID))
+}
+
+// handleUserGift 赠送注册资格
+func handleUserGift(c tele.Context, tgIDStr string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+
+	tgID, err := strconv.ParseInt(tgIDStr, 10, 64)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "无效的用户ID"})
+	}
+
+	// 生成注册码
+	codeRepo := repository.NewCodeRepository()
+	code := service.GenerateCode()
+	days := cfg.OpenDays // 默认天数
+	if days <= 0 {
+		days = 30
+	}
+
+	if err := codeRepo.Create(&models.Code{
+		Code: code,
+		Us:   days,
+		Used: false,
+		Cr:   c.Sender().ID,
+	}); err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 生成注册码失败", ShowAlert: true})
+	}
+
+	// 发送给目标用户
+	link := fmt.Sprintf("https://t.me/%s?start=%s", c.Bot().Me.Username, code)
+	text := fmt.Sprintf(
+		"🎁 **您收到了一份注册资格**\n\n"+
+			"来自管理员的赠送，请点击下方链接注册：\n\n"+
+			"[🔗 点击注册](%s)\n\n"+
+			"或复制注册码：`%s`\n"+
+			"有效期：%d 天",
+		link, code, days,
+	)
+
+	_, err = c.Bot().Send(&tele.User{ID: tgID}, text, tele.ModeMarkdown)
+	if err != nil {
+		logger.Warn().Err(err).Int64("tg", tgID).Msg("发送注册资格失败")
+		c.Respond(&tele.CallbackResponse{Text: "⚠️ 注册码已生成但发送失败，请手动转发", ShowAlert: true})
+		return c.Edit(fmt.Sprintf("⚠️ 注册码: `%s`\n\n用户可能未与Bot对话，请手动转发", code), tele.ModeMarkdown)
+	}
+
+	c.Respond(&tele.CallbackResponse{Text: "✅ 注册资格已发送", ShowAlert: true})
+	return c.Edit(fmt.Sprintf("✅ 已向用户 %d 发送注册资格\n注册码: `%s`", tgID, code), tele.ModeMarkdown)
+}
+
+// handleUserKick 踢出并封禁用户
+func handleUserKick(c tele.Context, tgIDStr string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+
+	tgID, err := strconv.ParseInt(tgIDStr, 10, 64)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "无效的用户ID"})
+	}
+
+	// 从群组踢出
+	groupID := cfg.Telegram.GroupID
+	if groupID != 0 {
+		member := &tele.ChatMember{
+			User: &tele.User{ID: tgID},
+		}
+		if err := c.Bot().Ban(&tele.Chat{ID: groupID}, member); err != nil {
+			logger.Warn().Err(err).Int64("tg", tgID).Msg("踢出用户失败")
+		}
+	}
+
+	// 禁用 Emby 账户
+	repo := repository.NewEmbyRepository()
+	user, _ := repo.GetByTG(tgID)
+	if user != nil && user.EmbyID != nil && *user.EmbyID != "" {
+		client := emby.GetClient()
+		client.DisableUser(*user.EmbyID)
+		repo.UpdateFields(tgID, map[string]interface{}{"lv": "e"})
+	}
+
+	c.Respond(&tele.CallbackResponse{Text: "✅ 用户已踢出并封禁", ShowAlert: true})
+	return c.Edit(fmt.Sprintf("✅ 用户 %d 已从群组踢出并封禁", tgID))
 }

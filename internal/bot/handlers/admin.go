@@ -21,13 +21,22 @@ import (
 )
 
 // KK /kk 用户管理命令
+// 支持: /kk <用户ID/用户名/@mention> 或回复消息 /kk
 func KK(c tele.Context) error {
 	args := c.Args()
-	if len(args) == 0 {
-		return c.Send("用法: /kk <用户ID/用户名/@mention>")
-	}
+	
+	var target string
 
-	target := args[0]
+	// 检查是否是回复消息
+	if c.Message().ReplyTo != nil && c.Message().ReplyTo.Sender != nil {
+		// 回复消息模式：/kk
+		target = strconv.FormatInt(c.Message().ReplyTo.Sender.ID, 10)
+	} else if len(args) > 0 {
+		// 普通模式：/kk <用户ID/用户名/@mention>
+		target = args[0]
+	} else {
+		return c.Send("用法: /kk <用户ID/用户名/@mention>\n\n或回复某人消息后发送:\n/kk")
+	}
 
 	// 处理 @ 提及
 	if strings.HasPrefix(target, "@") {
@@ -91,7 +100,10 @@ func showUserInfo(c tele.Context, user *models.Emby) error {
 
 	// 检查用户额外媒体库状态
 	extraLibsEnabled := false
-	if hasExtraLibs && user.EmbyID != nil && *user.EmbyID != "" {
+	hasEmby := user.EmbyID != nil && *user.EmbyID != ""
+	isBanned := user.Lv == "e" // 'e' 等级表示被封禁
+	
+	if hasExtraLibs && hasEmby {
 		client := emby.GetClient()
 		if embyUser, err := client.GetUser(*user.EmbyID); err == nil && embyUser.Policy != nil {
 			// 如果额外库不在阻止列表中，则认为已启用
@@ -110,7 +122,7 @@ func showUserInfo(c tele.Context, user *models.Emby) error {
 		}
 	}
 
-	return c.Send(text, keyboards.UserManageKeyboard(user.TG, hasExtraLibs, extraLibsEnabled), tele.ModeMarkdown)
+	return c.Send(text, keyboards.UserManageKeyboard(user.TG, hasExtraLibs, extraLibsEnabled, isBanned, hasEmby), tele.ModeMarkdown)
 }
 
 func getEmbyID(id *string) string {
@@ -121,34 +133,49 @@ func getEmbyID(id *string) string {
 }
 
 // Score /score 积分命令
+// 支持: /score <用户ID/@用户名> <积分> 或回复消息 /score <积分>
 func Score(c tele.Context) error {
 	args := c.Args()
-	if len(args) < 2 {
-		return c.Send("用法: /score <用户ID/@用户名> <+/-积分>\n\n例如:\n/score 123456789 100\n/score @username 100")
-	}
-
+	
 	var tgID int64
+	var scoreStr string
 	var err error
 
-	// 支持 @username 格式
-	target := args[0]
-	if strings.HasPrefix(target, "@") {
-		// 通过用户名查找
-		username := strings.TrimPrefix(target, "@")
-		repo := repository.NewEmbyRepository()
-		user, err := repo.GetByName(username)
-		if err != nil {
-			return c.Send(fmt.Sprintf("❌ 未找到用户名为 %s 的用户", target))
+	// 检查是否是回复消息
+	if c.Message().ReplyTo != nil && c.Message().ReplyTo.Sender != nil {
+		// 回复消息模式：/score <积分>
+		if len(args) < 1 {
+			return c.Send("用法: 回复消息后发送 /score <+/-积分>\n\n例如: /score 100")
 		}
-		tgID = user.TG
+		tgID = c.Message().ReplyTo.Sender.ID
+		scoreStr = args[0]
 	} else {
-		tgID, err = strconv.ParseInt(target, 10, 64)
-		if err != nil {
-			return c.Send("❌ 无效的用户ID\n\n支持格式: 用户ID 或 @用户名")
+		// 普通模式：/score <用户ID/@用户名> <积分>
+		if len(args) < 2 {
+			return c.Send("用法: /score <用户ID/@用户名> <+/-积分>\n\n例如:\n/score 123456789 100\n/score @username 100\n\n或回复某人消息后发送:\n/score 100")
 		}
+		
+		// 支持 @username 格式
+		target := args[0]
+		if strings.HasPrefix(target, "@") {
+			// 通过用户名查找
+			username := strings.TrimPrefix(target, "@")
+			repo := repository.NewEmbyRepository()
+			user, err := repo.GetByName(username)
+			if err != nil {
+				return c.Send(fmt.Sprintf("❌ 未找到用户名为 %s 的用户", target))
+			}
+			tgID = user.TG
+		} else {
+			tgID, err = strconv.ParseInt(target, 10, 64)
+			if err != nil {
+				return c.Send("❌ 无效的用户ID\n\n支持格式: 用户ID 或 @用户名")
+			}
+		}
+		scoreStr = args[1]
 	}
 
-	score, err := strconv.Atoi(args[1])
+	score, err := strconv.Atoi(scoreStr)
 	if err != nil {
 		return c.Send("❌ 无效的积分值")
 	}
@@ -183,18 +210,48 @@ func Coins(c tele.Context) error {
 }
 
 // Renew /renew 续期命令
+// 支持: /renew <用户ID/@用户名> <天数> 或回复消息 /renew <天数>
 func Renew(c tele.Context) error {
 	args := c.Args()
-	if len(args) < 2 {
-		return c.Send("用法: /renew <用户ID> <+/-天数>")
+	
+	var tgID int64
+	var daysStr string
+	var err error
+
+	// 检查是否是回复消息
+	if c.Message().ReplyTo != nil && c.Message().ReplyTo.Sender != nil {
+		// 回复消息模式：/renew <天数>
+		if len(args) < 1 {
+			return c.Send("用法: 回复消息后发送 /renew <+/-天数>\n\n例如: /renew 30")
+		}
+		tgID = c.Message().ReplyTo.Sender.ID
+		daysStr = args[0]
+	} else {
+		// 普通模式：/renew <用户ID/@用户名> <天数>
+		if len(args) < 2 {
+			return c.Send("用法: /renew <用户ID/@用户名> <+/-天数>\n\n例如:\n/renew 123456789 30\n/renew @username 30\n\n或回复某人消息后发送:\n/renew 30")
+		}
+		
+		// 支持 @username 格式
+		target := args[0]
+		if strings.HasPrefix(target, "@") {
+			username := strings.TrimPrefix(target, "@")
+			repo := repository.NewEmbyRepository()
+			user, err := repo.GetByName(username)
+			if err != nil {
+				return c.Send(fmt.Sprintf("❌ 未找到用户名为 %s 的用户", target))
+			}
+			tgID = user.TG
+		} else {
+			tgID, err = strconv.ParseInt(target, 10, 64)
+			if err != nil {
+				return c.Send("❌ 无效的用户ID\n\n支持格式: 用户ID 或 @用户名")
+			}
+		}
+		daysStr = args[1]
 	}
 
-	tgID, err := strconv.ParseInt(args[0], 10, 64)
-	if err != nil {
-		return c.Send("❌ 无效的用户ID")
-	}
-
-	days, err := strconv.Atoi(args[1])
+	days, err := strconv.Atoi(daysStr)
 	if err != nil {
 		return c.Send("❌ 无效的天数")
 	}
@@ -216,7 +273,12 @@ func Renew(c tele.Context) error {
 		return c.Send("❌ 更新到期时间失败")
 	}
 
-	return c.Send(fmt.Sprintf("✅ 用户 %d 到期时间已更新为: %s", tgID, newExpiry.Format("2006-01-02 15:04:05")))
+	userName := "未知"
+	if user.Name != nil {
+		userName = *user.Name
+	}
+
+	return c.Send(fmt.Sprintf("✅ 用户 %s (ID: %d) 到期时间已更新为: %s", userName, tgID, newExpiry.Format("2006-01-02 15:04:05")))
 }
 
 // RemoveEmby /rmemby 删除用户命令
