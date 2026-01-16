@@ -519,6 +519,12 @@ func UserManageKeyboard(userTG int64, hasExtraLibs bool, extraLibsEnabled bool, 
 	if !hasEmby {
 		rows = append(rows, markup.Row(
 			markup.Data("✨ 赠送资格", fmt.Sprintf("user_gift|%d", userTG)),
+			markup.Data("👑 赠送白名单", fmt.Sprintf("user_gift_whitelist|%d", userTG)),
+		))
+	} else {
+		// 有账户时也可以升级为白名单
+		rows = append(rows, markup.Row(
+			markup.Data("👑 赠送白名单", fmt.Sprintf("user_gift_whitelist|%d", userTG)),
 		))
 	}
 

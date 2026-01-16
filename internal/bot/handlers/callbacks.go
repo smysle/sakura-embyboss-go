@@ -20,6 +20,20 @@ import (
 	"github.com/smysle/sakura-embyboss-go/pkg/logger"
 )
 
+// isPublicAction 判断是否是公共操作（任何人都可以点击的按钮）
+// 比如红包、关闭按钮等
+func isPublicAction(action string) bool {
+	publicActions := map[string]bool{
+		"close":      true,
+		"closeit":    true,
+		"noop":       true,
+		"grab_red":   true, // 抢红包是公共的
+		"count":      true, // 查看媒体数量是公共的
+		"server":     true, // 服务器信息是公共的
+	}
+	return publicActions[action]
+}
+
 // editOrReply 编辑消息或发送新消息
 // 解决 Telegram "there is no text in the message to edit" 错误
 // 当消息是图片/媒体消息时，使用 EditCaption；否则使用 Edit
@@ -77,6 +91,23 @@ func OnCallback(c tele.Context) error {
 	}
 
 	logger.Debug().Str("raw_data", c.Callback().Data).Str("action", action).Msg("收到回调")
+
+	// 检查按钮权限：个人面板按钮只能由原消息发起者点击
+	// 获取原始消息的回复目标用户（如果是 reply）
+	msg := c.Callback().Message
+	if msg != nil && msg.ReplyTo != nil && msg.ReplyTo.Sender != nil {
+		// 这是一个回复消息，检查点击者是否是原发起者
+		if !isPublicAction(action) && c.Sender().ID != msg.ReplyTo.Sender.ID {
+			cfg := config.Get()
+			// 管理员可以点击任何按钮
+			if !cfg.IsAdmin(c.Sender().ID) {
+				return c.Respond(&tele.CallbackResponse{
+					Text:      "❌ 这不是你的消息哦，无法操作~",
+					ShowAlert: true,
+				})
+			}
+		}
+	}
 
 	switch action {
 	case "back_start":
@@ -280,6 +311,11 @@ func OnCallback(c tele.Context) error {
 	case "user_gift":
 		if len(parts) >= 2 {
 			return handleUserGift(c, parts[1])
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	case "user_gift_whitelist":
+		if len(parts) >= 2 {
+			return handleUserGiftWhitelist(c, parts[1])
 		}
 		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
 	case "user_kick":
@@ -1484,6 +1520,53 @@ func handleUserGift(c tele.Context, tgIDStr string) error {
 
 	c.Respond(&tele.CallbackResponse{Text: "✅ 注册资格已发送", ShowAlert: true})
 	return c.Edit(fmt.Sprintf("✅ 已向用户 %d 发送注册资格\n注册码: `%s`", tgID, code), tele.ModeMarkdown)
+}
+
+// handleUserGiftWhitelist 赠送白名单资格
+func handleUserGiftWhitelist(c tele.Context, tgIDStr string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+
+	tgID, err := strconv.ParseInt(tgIDStr, 10, 64)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "无效的用户ID"})
+	}
+
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(tgID)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 用户不存在"})
+	}
+
+	// 设置为白名单等级
+	if err := repo.UpdateFields(tgID, map[string]interface{}{"lv": models.LevelA}); err != nil {
+		logger.Error().Err(err).Int64("tg", tgID).Msg("设置白名单失败")
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 设置白名单失败", ShowAlert: true})
+	}
+
+	// 如果用户有 Emby 账户，同步更新 Emby 策略
+	if user.EmbyID != nil && *user.EmbyID != "" {
+		client := emby.GetClient()
+		// 白名单用户可能有特殊线路
+		if cfg.Emby.WhitelistLine != nil && *cfg.Emby.WhitelistLine != "" {
+			// 可以在这里添加白名单特殊处理
+			logger.Info().Str("embyID", *user.EmbyID).Msg("白名单用户已设置")
+		}
+		// 确保账户处于启用状态
+		client.EnableUser(*user.EmbyID)
+	}
+
+	// 通知用户
+	notifyText := "🎉 **恭喜！**\n\n您已被管理员设置为 **👑 白名单用户**！\n\n您将享有以下特权：\n• 永不过期\n• 专属线路\n• 优先支持"
+	_, err = c.Bot().Send(&tele.User{ID: tgID}, notifyText, tele.ModeMarkdown)
+	if err != nil {
+		logger.Warn().Err(err).Int64("tg", tgID).Msg("通知用户失败")
+	}
+
+	c.Respond(&tele.CallbackResponse{Text: "✅ 已设置为白名单", ShowAlert: true})
+	return c.Edit(fmt.Sprintf("✅ 用户 %d 已设置为 **👑 白名单用户**", tgID), tele.ModeMarkdown)
 }
 
 // handleUserKick 踢出并封禁用户

@@ -4,6 +4,7 @@ package handlers
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tele "gopkg.in/telebot.v3"
 
@@ -194,10 +195,21 @@ func MyInfo(c tele.Context) error {
 	user := c.Sender()
 	cfg := config.Get()
 
+	// 先删除用户的命令消息
+	if c.Message() != nil {
+		go c.Bot().Delete(c.Message())
+	}
+
 	repo := repository.NewEmbyRepository()
 	embyUser, err := repo.GetByTG(user.ID)
 	if err != nil {
-		return c.Send("❌ 未找到您的账户信息，请先 /start")
+		msg, _ := c.Bot().Send(c.Chat(), "❌ 未找到您的账户信息，请先 /start", tele.ModeMarkdown)
+		// 60秒后删除
+		go func() {
+			time.Sleep(60 * time.Second)
+			c.Bot().Delete(msg)
+		}()
+		return nil
 	}
 
 	var expiryText string
@@ -212,27 +224,41 @@ func MyInfo(c tele.Context) error {
 		expiryText = "永久"
 	}
 
+	// 构建格式化文本（与 Python 版本一致）
 	text := fmt.Sprintf(
-		"📋 **个人信息**\n\n"+
-			"**· 🆔 TG ID** | `%d`\n"+
-			"**· 👤 用户名** | %s\n"+
-			"**· 📊 等级** | %s\n"+
-			"**· 🍒 积分** | %d %s\n"+
-			"**· ⏰ 到期** | %s\n"+
-			"**· 🎁 邀请次数** | %d\n",
+		"**· 🍉 TG&名称** | [%s](tg://user?id=%d)\n"+
+			"**· 🍒 识别のID** | `%d`\n"+
+			"**· 🍓 当前状态** | %s\n"+
+			"**· 🍥 持有%s** | %d\n"+
+			"**· 💠 账号名称** | %s\n"+
+			"**· 🚨 到期时间** | **%s**\n",
+		user.FirstName, user.ID,
 		user.ID,
-		getEmbyName(embyUser.Name),
 		embyUser.GetLevelName(),
-		embyUser.Us, cfg.Money,
+		cfg.Money, embyUser.Us,
+		getEmbyName(embyUser.Name),
 		expiryText,
-		embyUser.Iv,
 	)
 
-	if embyUser.HasEmbyAccount() {
-		text += fmt.Sprintf("**· 🎬 Emby ID** | `%s`\n", *embyUser.EmbyID)
+	markup := &tele.ReplyMarkup{}
+	closeBtn := markup.Data("❌ 删除消息", "closeit")
+	markup.Inline(
+		markup.Row(closeBtn),
+	)
+
+	// 发送消息并60秒后自动删除
+	msg, err := c.Bot().Send(c.Chat(), text, markup, tele.ModeMarkdown)
+	if err != nil {
+		return err
 	}
 
-	return c.Send(text, keyboards.BackKeyboard("back_start"), tele.ModeMarkdown)
+	// 60秒后自动删除
+	go func() {
+		time.Sleep(60 * time.Second)
+		c.Bot().Delete(msg)
+	}()
+
+	return nil
 }
 
 func getEmbyName(name *string) string {
