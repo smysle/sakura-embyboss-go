@@ -111,6 +111,28 @@ func (m *Manager) SetState(userID int64, state State) {
 	}
 }
 
+// SetStateWithData 设置用户状态和数据
+func (m *Manager) SetStateWithData(userID int64, state State, data map[string]interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if data == nil {
+		data = make(map[string]interface{})
+	}
+
+	if session, ok := m.sessions[userID]; ok {
+		session.State = state
+		session.Data = data
+		session.UpdatedAt = time.Now()
+	} else {
+		m.sessions[userID] = &UserSession{
+			State:     state,
+			Data:      data,
+			UpdatedAt: time.Now(),
+		}
+	}
+}
+
 // SetStateWithAction 设置用户状态和操作类型
 func (m *Manager) SetStateWithAction(userID int64, state State, action ActionType) {
 	m.mu.Lock()
