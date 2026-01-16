@@ -205,3 +205,39 @@ func (r *CodeRepository) GetByCreator(tgID int64) ([]models.Code, error) {
 	err := r.db.Where("tg = ?", tgID).Order("id DESC").Find(&codes).Error
 	return codes, err
 }
+
+// CreatorStats 创建者统计
+type CreatorStats struct {
+	Creator int64
+	Total   int
+	Used    int
+}
+
+// GetStatsByCreator 获取各管理员创建的注册码统计
+func (r *CodeRepository) GetStatsByCreator() ([]CreatorStats, error) {
+	var results []struct {
+		Cr    int64
+		Total int64
+		Used  int64
+	}
+
+	err := r.db.Model(&models.Code{}).
+		Select("cr, COUNT(*) as total, SUM(CASE WHEN used = true THEN 1 ELSE 0 END) as used").
+		Group("cr").
+		Scan(&results).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	var stats []CreatorStats
+	for _, r := range results {
+		stats = append(stats, CreatorStats{
+			Creator: r.Cr,
+			Total:   int(r.Total),
+			Used:    int(r.Used),
+		})
+	}
+
+	return stats, nil
+}

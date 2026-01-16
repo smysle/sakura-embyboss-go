@@ -36,6 +36,17 @@ const (
 
 	// 邀请码兑换相关状态
 	StateWaitingInviteInfo State = "waiting_invite_info" // 等待输入邀请码兑换信息
+
+	// 管理面板相关状态
+	StateWaitingOpenTiming    State = "waiting_open_timing"    // 等待输入定时注册参数
+	StateWaitingOpenDays      State = "waiting_open_days"      // 等待输入注册天数
+	StateWaitingUserLimit     State = "waiting_user_limit"     // 等待输入用户限制
+	StateWaitingCodeCreate    State = "waiting_code_create"    // 等待输入注册码参数
+	StateWaitingGiftDays      State = "waiting_gift_days"      // 等待输入赠送天数
+	StateWaitingActivityDays  State = "waiting_activity_days"  // 等待输入活跃检测天数
+	StateWaitingFreezeDays    State = "waiting_freeze_days"    // 等待输入封存天数
+	StateWaitingLine          State = "waiting_line"           // 等待输入线路
+	StateWaitingWhitelistLine State = "waiting_whitelist_line" // 等待输入白名单线路
 )
 
 // ActionType 操作类型（用于安全码验证后的操作）

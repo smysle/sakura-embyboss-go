@@ -99,6 +99,56 @@ func OnCallback(c tele.Context) error {
 		return handleCheckin(c)
 	case "admin_panel":
 		return handleAdminPanel(c)
+	// 注册状态面板
+	case "open_menu":
+		return handleOpenMenu(c)
+	case "open_stat":
+		return handleOpenStat(c)
+	case "open_timing":
+		return handleOpenTiming(c)
+	case "open_days":
+		return handleOpenDays(c)
+	case "all_user_limit":
+		return handleAllUserLimit(c)
+	// 注册码
+	case "cr_link":
+		return handleCrLink(c)
+	case "ch_link":
+		return handleChLink(c)
+	// 兑换设置面板
+	case "set_renew":
+		return handleSetRenew(c)
+	case "set_renew_checkin":
+		return handleSetRenewCheckin(c)
+	case "set_renew_exchange":
+		return handleSetRenewExchange(c)
+	case "set_renew_whitelist":
+		return handleSetRenewWhitelist(c)
+	case "set_renew_invite":
+		return handleSetRenewInvite(c)
+	case "set_checkin_lv", "set_invite_lv":
+		return handleSetLevelMenu(c, action)
+	// 定时任务面板
+	case "schedall":
+		return handleSchedAll(c)
+	case "sched_dayrank", "sched_weekrank", "sched_dayplayrank", "sched_weekplayrank", "sched_check_ex", "sched_low_activity", "sched_backup_db":
+		return handleSchedToggle(c, action)
+	// 白名单列表、设备列表
+	case "admin_whitelist":
+		return handleAdminWhitelist(c)
+	case "admin_devices":
+		return handleAdminDevices(c)
+	// Owner配置面板
+	case "cfg_export_log":
+		return handleCfgExportLog(c)
+	case "cfg_toggle_leave_ban", "cfg_toggle_play_reward", "cfg_toggle_red", "cfg_toggle_red_private":
+		return handleCfgToggle(c, action)
+	case "cfg_set_gift_days", "cfg_set_activity_days", "cfg_set_freeze_days":
+		return handleCfgSetDays(c, action)
+	case "cfg_set_line", "cfg_set_whitelist_line":
+		return handleCfgSetLine(c, action)
+	case "cfg_mp":
+		return handleCfgMP(c)
 	case "set_lv":
 		return handleSetLevel(c, parts)
 	case "grab_red":
@@ -816,7 +866,11 @@ func handleOwnerConfig(c tele.Context) error {
 		return c.Respond(&tele.CallbackResponse{Text: "❌ 仅 Owner 可用", ShowAlert: true})
 	}
 	c.Respond()
-	return showConfigPanel(c)
+
+	text := "⚙️ **系统配置**\n\n" +
+		"在这里可以管理系统各项配置"
+
+	return editOrReply(c, text, keyboards.OwnerConfigKeyboard(cfg), tele.ModeMarkdown)
 }
 
 // handleOwnerBackup 备份数据库

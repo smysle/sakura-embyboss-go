@@ -88,24 +88,43 @@ func AdminPanelKeyboard(isOwner bool) *tele.ReplyMarkup {
 
 	var rows []tele.Row
 
-	// 用户管理
+	// 第一行：注册状态、注册码
 	rows = append(rows, markup.Row(
-		markup.Data("👥 用户管理", "admin_users"),
-		markup.Data("📝 注册码管理", "admin_codes"),
+		markup.Data("⭕ 注册状态", "open_menu"),
+		markup.Data("🎟️ 注册/续期码", "cr_link"),
 	))
 
-	// 系统功能
+	// 第二行：查询注册、兑换设置
+	rows = append(rows, markup.Row(
+		markup.Data("💊 查询注册", "ch_link"),
+		markup.Data("🏬 兑换设置", "set_renew"),
+	))
+
+	// 第三行：用户列表、白名单列表
+	rows = append(rows, markup.Row(
+		markup.Data("👥 用户列表", "admin_users"),
+		markup.Data("👑 白名单列表", "admin_whitelist"),
+	))
+
+	// 第四行：设备列表、定时任务
+	rows = append(rows, markup.Row(
+		markup.Data("💠 设备列表", "admin_devices"),
+		markup.Data("🌏 定时", "schedall"),
+	))
+
+	// 第五行：统计、到期检测
 	rows = append(rows, markup.Row(
 		markup.Data("📊 统计信息", "admin_stats"),
 		markup.Data("🔍 到期检测", "admin_check_ex"),
 	))
 
-	// 排行榜
+	// 第六行：排行榜
 	rows = append(rows, markup.Row(
 		markup.Data("📈 日榜", "admin_day_ranks"),
 		markup.Data("📊 周榜", "admin_week_ranks"),
 	))
 
+	// Owner 专用
 	if isOwner {
 		rows = append(rows, markup.Row(
 			markup.Data("⚙️ 系统配置", "owner_config"),
@@ -115,11 +134,238 @@ func AdminPanelKeyboard(isOwner bool) *tele.ReplyMarkup {
 
 	// 返回按钮
 	rows = append(rows, markup.Row(
-		markup.Data("« 返回", "back_start"),
+		markup.Data("🕹️ 主界面", "back_start"),
 	))
 
 	markup.Inline(rows...)
 	return markup
+}
+
+// OpenMenuKeyboard 注册状态面板键盘
+func OpenMenuKeyboard(cfg *config.Config) *tele.ReplyMarkup {
+	markup := &tele.ReplyMarkup{}
+
+	// 自由注册状态
+	openStatText := "❎ 自由注册"
+	if cfg.Open.Status {
+		openStatText = "✅ 自由注册"
+	}
+
+	// 定时注册状态
+	timingText := "❎ 定时注册"
+	// TODO: 检查定时注册状态
+
+	var rows []tele.Row
+
+	rows = append(rows, markup.Row(
+		markup.Data(openStatText, "open_stat"),
+		markup.Data(timingText, "open_timing"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("🤖 注册天数: %d天", cfg.Open.Temp), "open_days"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("⭕ 注册限制: %d人", cfg.Open.MaxUsers), "all_user_limit"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data("🌟 返回上一级", "admin_panel"),
+	))
+
+	markup.Inline(rows...)
+	return markup
+}
+
+// SetRenewKeyboard 兑换设置面板键盘
+func SetRenewKeyboard(cfg *config.Config) *tele.ReplyMarkup {
+	markup := &tele.ReplyMarkup{}
+
+	// 签到状态
+	checkinText := "❌ 每日签到"
+	if cfg.Open.Checkin {
+		checkinText = "✔️ 每日签到"
+	}
+
+	// 自动续期状态
+	exchangeText := "❌ 自动币续期"
+	if cfg.Open.Exchange {
+		exchangeText = "✔️ 自动币续期"
+	}
+
+	// 白名单兑换
+	whitelistText := "❌ 兑换白名单"
+	if cfg.Open.Whitelist {
+		whitelistText = "✔️ 兑换白名单"
+	}
+
+	// 邀请码兑换
+	inviteText := "❌ 兑换邀请码"
+	if cfg.Open.Invite {
+		inviteText = "✔️ 兑换邀请码"
+	}
+
+	var rows []tele.Row
+
+	rows = append(rows, markup.Row(
+		markup.Data(checkinText, "set_renew_checkin"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("签到等级: %s", getLevelName(cfg.Open.CheckinLevel)), "set_checkin_lv"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(exchangeText, "set_renew_exchange"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(whitelistText, "set_renew_whitelist"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(inviteText, "set_renew_invite"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("邀请等级: %s", getLevelName(cfg.Open.InviteLevel)), "set_invite_lv"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data("🌟 返回上一级", "admin_panel"),
+	))
+
+	markup.Inline(rows...)
+	return markup
+}
+
+// SchedAllKeyboard 定时任务面板键盘
+func SchedAllKeyboard(cfg *config.Config) *tele.ReplyMarkup {
+	markup := &tele.ReplyMarkup{}
+
+	getStatus := func(enabled bool) string {
+		if enabled {
+			return "✅"
+		}
+		return "❎"
+	}
+
+	var rows []tele.Row
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("%s 播放日榜", getStatus(cfg.Scheduler.DayRank)), "sched_dayrank"),
+		markup.Data(fmt.Sprintf("%s 播放周榜", getStatus(cfg.Scheduler.WeekRank)), "sched_weekrank"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("%s 观影日榜", getStatus(cfg.Scheduler.DayPlayRank)), "sched_dayplayrank"),
+		markup.Data(fmt.Sprintf("%s 观影周榜", getStatus(cfg.Scheduler.WeekPlayRank)), "sched_weekplayrank"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("%s 到期检测", getStatus(cfg.Scheduler.CheckExpired)), "sched_check_ex"),
+		markup.Data(fmt.Sprintf("%s 活跃检测", getStatus(cfg.Scheduler.LowActivity)), "sched_low_activity"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("%s 自动备份", getStatus(cfg.Scheduler.BackupDB)), "sched_backup_db"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data("🌟 返回上一级", "admin_panel"),
+	))
+
+	markup.Inline(rows...)
+	return markup
+}
+
+// OwnerConfigKeyboard Owner配置面板键盘
+func OwnerConfigKeyboard(cfg *config.Config) *tele.ReplyMarkup {
+	markup := &tele.ReplyMarkup{}
+
+	getStatus := func(enabled bool) string {
+		if enabled {
+			return "✅"
+		}
+		return "❎"
+	}
+
+	var rows []tele.Row
+
+	// 导出日志
+	rows = append(rows, markup.Row(
+		markup.Data("📄 导出日志", "cfg_export_log"),
+	))
+
+	// 功能开关
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("%s 退群封禁", getStatus(cfg.Open.LeaveBan)), "cfg_toggle_leave_ban"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("%s 观影奖励", getStatus(cfg.Open.UserPlays)), "cfg_toggle_play_reward"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("%s 红包功能", getStatus(cfg.RedEnvelope.Enabled)), "cfg_toggle_red"),
+		markup.Data(fmt.Sprintf("%s 专属红包", getStatus(cfg.RedEnvelope.AllowPrivate)), "cfg_toggle_red_private"),
+	))
+
+	// 数值设置
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("赠送资格天数: %d天", cfg.KKGiftDays), "cfg_set_gift_days"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("活跃检测天数: %d天", cfg.ActivityCheckDays), "cfg_set_activity_days"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("封存账号天数: %d天", cfg.FreezeDays), "cfg_set_freeze_days"),
+	))
+
+	// 线路设置
+	rows = append(rows, markup.Row(
+		markup.Data("💠 普通用户线路", "cfg_set_line"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data("🌟 白名单线路", "cfg_set_whitelist_line"),
+	))
+
+	// MoviePilot 设置
+	rows = append(rows, markup.Row(
+		markup.Data(fmt.Sprintf("%s MoviePilot点播", getStatus(cfg.MoviePilot.Enabled)), "cfg_mp"),
+	))
+
+	rows = append(rows, markup.Row(
+		markup.Data("🌟 返回上一级", "admin_panel"),
+	))
+
+	markup.Inline(rows...)
+	return markup
+}
+
+// getLevelName 获取等级名称
+func getLevelName(lv string) string {
+	switch lv {
+	case "a":
+		return "🅰️ 白名单"
+	case "b":
+		return "🅱️ 普通用户"
+	case "c":
+		return "©️ 已禁用"
+	case "d":
+		return "🅳️ 所有用户"
+	default:
+		return lv
+	}
+}
+
+// GetLevelName 公开方法获取等级名称
+func GetLevelName(lv string) string {
+	return getLevelName(lv)
 }
 
 // AccountInfoKeyboard 账户信息键盘
