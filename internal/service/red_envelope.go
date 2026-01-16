@@ -193,7 +193,19 @@ func (s *RedEnvelopeService) ReceiveEnvelope(uuid string, receiverTG int64, rece
 	}
 
 	// 不能领取自己的红包
+	// 注意：如果 SenderTG 为 0，说明数据有问题，也需要拒绝
+	if envelope.SenderTG == 0 {
+		logger.Error().
+			Str("uuid", uuid).
+			Msg("红包 SenderTG 为 0，数据异常")
+		return nil, fmt.Errorf("红包数据异常")
+	}
 	if envelope.SenderTG == receiverTG {
+		logger.Debug().
+			Int64("sender_tg", envelope.SenderTG).
+			Int64("receiver_tg", receiverTG).
+			Str("uuid", uuid).
+			Msg("阻止用户领取自己的红包")
 		return nil, ErrCannotReceiveOwnRed
 	}
 

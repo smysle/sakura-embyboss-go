@@ -124,12 +124,28 @@ func getEmbyID(id *string) string {
 func Score(c tele.Context) error {
 	args := c.Args()
 	if len(args) < 2 {
-		return c.Send("用法: /score <用户ID> <+/-积分>")
+		return c.Send("用法: /score <用户ID/@用户名> <+/-积分>\n\n例如:\n/score 123456789 100\n/score @username 100")
 	}
 
-	tgID, err := strconv.ParseInt(args[0], 10, 64)
-	if err != nil {
-		return c.Send("❌ 无效的用户ID")
+	var tgID int64
+	var err error
+
+	// 支持 @username 格式
+	target := args[0]
+	if strings.HasPrefix(target, "@") {
+		// 通过用户名查找
+		username := strings.TrimPrefix(target, "@")
+		repo := repository.NewEmbyRepository()
+		user, err := repo.GetByName(username)
+		if err != nil {
+			return c.Send(fmt.Sprintf("❌ 未找到用户名为 %s 的用户", target))
+		}
+		tgID = user.TG
+	} else {
+		tgID, err = strconv.ParseInt(target, 10, 64)
+		if err != nil {
+			return c.Send("❌ 无效的用户ID\n\n支持格式: 用户ID 或 @用户名")
+		}
 	}
 
 	score, err := strconv.Atoi(args[1])
@@ -152,8 +168,13 @@ func Score(c tele.Context) error {
 		return c.Send("❌ 更新积分失败")
 	}
 
+	userName := "未知"
+	if user.Name != nil {
+		userName = *user.Name
+	}
+
 	cfg := config.Get()
-	return c.Send(fmt.Sprintf("✅ 用户 %d 积分已更新: %d -> %d %s", tgID, user.Us, newScore, cfg.Money))
+	return c.Send(fmt.Sprintf("✅ 用户 %s (ID: %d) 积分已更新: %d -> %d %s", userName, tgID, user.Us, newScore, cfg.Money))
 }
 
 // Coins /coins 花币命令（同 Score）
