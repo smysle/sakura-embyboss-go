@@ -187,7 +187,7 @@ func handleNezhaConfig(c tele.Context) error {
 	
 	// 设置会话状态
 	sessionMgr := session.GetManager()
-	sessionMgr.SetStateWithAction(c.Sender().ID, session.StateWaitingInput, "cfg_nezha")
+	sessionMgr.SetStateWithStringAction(c.Sender().ID, session.StateWaitingInput, "cfg_nezha")
 	
 	return editOrReply(c,
 		"📌 **设置哪吒探针**\n\n"+
@@ -206,7 +206,7 @@ func handleLineConfig(c tele.Context) error {
 	c.Respond()
 	
 	sessionMgr := session.GetManager()
-	sessionMgr.SetStateWithAction(c.Sender().ID, session.StateWaitingInput, "cfg_line")
+	sessionMgr.SetStateWithStringAction(c.Sender().ID, session.StateWaitingInput, "cfg_line")
 	
 	cfg := config.Get()
 	return editOrReply(c,
@@ -224,7 +224,7 @@ func handleWhitelistLineConfig(c tele.Context) error {
 	c.Respond()
 	
 	sessionMgr := session.GetManager()
-	sessionMgr.SetStateWithAction(c.Sender().ID, session.StateWaitingInput, "cfg_whitelist_line")
+	sessionMgr.SetStateWithStringAction(c.Sender().ID, session.StateWaitingInput, "cfg_whitelist_line")
 	
 	cfg := config.Get()
 	currentLine := "未设置"
@@ -400,7 +400,7 @@ func handleConfigSet(c tele.Context, key string) error {
 	c.Respond()
 	
 	sessionMgr := session.GetManager()
-	sessionMgr.SetStateWithAction(c.Sender().ID, session.StateWaitingInput, "cfg_"+key)
+	sessionMgr.SetStateWithStringAction(c.Sender().ID, session.StateWaitingInput, "cfg_"+key)
 	
 	var prompt string
 	cfg := config.Get()
@@ -467,7 +467,7 @@ func handleMPSet(c tele.Context, key string) error {
 	c.Respond()
 	
 	sessionMgr := session.GetManager()
-	sessionMgr.SetStateWithAction(c.Sender().ID, session.StateWaitingInput, "cfg_mp_"+key)
+	sessionMgr.SetStateWithStringAction(c.Sender().ID, session.StateWaitingInput, "cfg_mp_"+key)
 	
 	var prompt string
 	cfg := config.Get()

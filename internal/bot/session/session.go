@@ -116,6 +116,36 @@ func (m *Manager) SetStateWithAction(userID int64, state State, action ActionTyp
 	}
 }
 
+// SetStateWithStringAction 设置用户状态和字符串操作类型（用于配置面板等动态 action）
+func (m *Manager) SetStateWithStringAction(userID int64, state State, action string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if session, ok := m.sessions[userID]; ok {
+		session.State = state
+		session.Data["string_action"] = action
+		session.UpdatedAt = time.Now()
+	} else {
+		m.sessions[userID] = &UserSession{
+			State:     state,
+			Data:      map[string]interface{}{"string_action": action},
+			UpdatedAt: time.Now(),
+		}
+	}
+}
+
+// GetStringAction 获取字符串操作类型
+func (m *Manager) GetStringAction(userID int64) string {
+	val, ok := m.GetData(userID, "string_action")
+	if !ok {
+		return ""
+	}
+	if s, ok := val.(string); ok {
+		return s
+	}
+	return ""
+}
+
 // GetState 获取用户状态
 func (m *Manager) GetState(userID int64) State {
 	m.mu.RLock()
@@ -229,6 +259,11 @@ func (m *Manager) ClearSession(userID int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.sessions, userID)
+}
+
+// ClearState 清除用户状态（ClearSession 的别名）
+func (m *Manager) ClearState(userID int64) {
+	m.ClearSession(userID)
 }
 
 // HasActiveSession 检查用户是否有活跃会话

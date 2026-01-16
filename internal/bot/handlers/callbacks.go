@@ -795,13 +795,13 @@ func handleDevices(c tele.Context) error {
 				break
 			}
 			lastSeen := "未知"
-			if device.LastSeen != nil {
-				lastSeen = device.LastSeen.Format("01-02 15:04")
+			if device.LastActivityDate != "" {
+				lastSeen = device.LastActivityDate
 			}
 			text += fmt.Sprintf("• **%s** (%s)\n  └ 客户端: %s | 最后活跃: %s\n",
-				device.Name,
+				device.DeviceName,
 				device.RemoteAddr,
-				device.Client,
+				device.AppName,
 				lastSeen,
 			)
 		}
