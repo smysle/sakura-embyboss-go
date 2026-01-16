@@ -64,12 +64,3 @@ func MPConfirmDownloadKeyboard(index int) *tele.ReplyMarkup {
 
 	return menu
 }
-
-// BackToMemberKeyboard 返回会员中心键盘
-func BackToMemberKeyboard() *tele.ReplyMarkup {
-	menu := &tele.ReplyMarkup{}
-	menu.Inline(
-		menu.Row(menu.Data("↩️ 返回会员中心", "member_home")),
-	)
-	return menu
-}
