@@ -99,6 +99,12 @@ func (r *CodeRepository) CountStats(tgID *int64) (*CodeStats, error) {
 	return stats, nil
 }
 
+// DeleteUnusedByCreator 删除某用户创建的所有未使用注册码
+func (r *CodeRepository) DeleteUnusedByCreator(tgID int64) (int64, error) {
+	result := r.db.Where("cr = ? AND (used IS NULL OR used = false)", tgID).Delete(&models.Code{})
+	return result.RowsAffected, result.Error
+}
+
 // CodeStats 注册码统计
 type CodeStats struct {
 	Used   int64 // 已使用

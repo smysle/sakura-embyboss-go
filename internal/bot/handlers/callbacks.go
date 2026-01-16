@@ -287,6 +287,39 @@ func OnCallback(c tele.Context) error {
 			return handleUserKick(c, parts[1])
 		}
 		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
+	// 创建账户（使用注册码）
+	case "create":
+		return handleRegister(c)
+	// 我的设备
+	case "my_devices":
+		return handleMyDevices(c)
+	// 用户查看排行榜
+	case "uranks":
+		return handleURanks(c)
+	// 管理员查看用户列表（普通用户/白名单）
+	case "whitelist", "normaluser":
+		return handleUserListByLevel(c, action)
+	// closeit 关闭消息（同 close）
+	case "closeit":
+		return handleClose(c)
+	// 红包按钮点击
+	case "red_envelope":
+		if len(parts) >= 2 {
+			return HandleGrabRedEnvelope(c, parts[1])
+		}
+		return c.Respond(&tele.CallbackResponse{Text: "无效的红包"})
+	// 邀请相关
+	case "users_iv":
+		return handleUsersInvite(c, parts)
+	// exchange 积分兑换
+	case "exchange":
+		return handleStore(c)
+	// 删除注册码
+	case "delete_codes":
+		return handleDeleteCodes(c, parts)
+	// 查看管理员注册码
+	case "ch_admin_link":
+		return handleChAdminLink(c, parts)
 	default:
 		// 检查是否是 changetg_xxx_xxx 格式（管理员审核）
 		if strings.HasPrefix(data, "changetg_") || strings.HasPrefix(data, "nochangetg_") {
@@ -1488,3 +1521,204 @@ func handleUserKick(c tele.Context, tgIDStr string) error {
 	c.Respond(&tele.CallbackResponse{Text: "✅ 用户已踢出并封禁", ShowAlert: true})
 	return c.Edit(fmt.Sprintf("✅ 用户 %d 已从群组踢出并封禁", tgID))
 }
+
+// handleMyDevices 我的设备列表
+func handleMyDevices(c tele.Context) error {
+	c.Respond(&tele.CallbackResponse{Text: "📱 获取设备列表..."})
+
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(c.Sender().ID)
+	if err != nil || user == nil {
+		return editOrReply(c, "❌ 未找到用户信息", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	if user.EmbyID == nil || *user.EmbyID == "" {
+		return editOrReply(c, "❌ 您还没有 Emby 账户", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	// 获取设备列表
+	client := emby.GetClient()
+	devices, err := client.GetUserDevicesSimple(*user.EmbyID)
+	if err != nil {
+		logger.Error().Err(err).Str("embyID", *user.EmbyID).Msg("获取设备列表失败")
+		return editOrReply(c, "❌ 获取设备列表失败", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	userName := "未知"
+	if user.Name != nil {
+		userName = *user.Name
+	}
+
+	text := fmt.Sprintf(
+		"📱 **我的设备**\n\n"+
+			"👤 用户: `%s`\n"+
+			"📊 设备数量: %d\n\n",
+		userName,
+		len(devices),
+	)
+
+	if len(devices) == 0 {
+		text += "_暂无登录设备_"
+	} else {
+		text += "**🔧 设备列表:**\n"
+		for i, device := range devices {
+			if i >= 10 {
+				text += fmt.Sprintf("\n_...还有 %d 个设备_", len(devices)-10)
+				break
+			}
+			text += fmt.Sprintf("• %s (%s)\n", device.Name, device.AppName)
+		}
+	}
+
+	return editOrReply(c, text, keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+}
+
+// handleURanks 用户观影排行
+func handleURanks(c tele.Context) error {
+	c.Respond(&tele.CallbackResponse{Text: "📈 生成排行榜..."})
+
+	cfg := config.Get()
+	repo := repository.NewEmbyRepository()
+
+	// 获取用户播放排行
+	users, err := repo.GetTopPlayUsers(20)
+	if err != nil {
+		return editOrReply(c, "❌ 获取排行榜失败", keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+	}
+
+	text := fmt.Sprintf("📈 **%s 用户观影排行**\n\n", cfg.Ranks.Logo)
+
+	if len(users) == 0 {
+		text += "_暂无观影数据_"
+	} else {
+		for i, user := range users {
+			medal := ""
+			switch i {
+			case 0:
+				medal = "🥇"
+			case 1:
+				medal = "🥈"
+			case 2:
+				medal = "🥉"
+			default:
+				medal = fmt.Sprintf("%d.", i+1)
+			}
+			name := "未知"
+			if user.Name != nil {
+				name = *user.Name
+			}
+			text += fmt.Sprintf("%s %s\n", medal, name)
+		}
+	}
+
+	return editOrReply(c, text, keyboards.BackKeyboard("members"), tele.ModeMarkdown)
+}
+
+// handleUserListByLevel 根据等级查看用户列表
+func handleUserListByLevel(c tele.Context, levelType string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "📋 获取用户列表..."})
+
+	repo := repository.NewEmbyRepository()
+	var users []models.Emby
+	var title string
+
+	if levelType == "whitelist" {
+		users, _ = repo.GetByLevel(models.LevelA)
+		title = "👑 白名单用户"
+	} else {
+		users, _ = repo.GetByLevel(models.LevelB)
+		title = "👥 普通用户"
+	}
+
+	text := fmt.Sprintf("**%s** (共 %d 人)\n\n", title, len(users))
+
+	for i, user := range users {
+		if i >= 30 {
+			text += fmt.Sprintf("\n_...还有 %d 人_", len(users)-30)
+			break
+		}
+		name := "未知"
+		if user.Name != nil {
+			name = *user.Name
+		}
+		text += fmt.Sprintf("%d. `%s` (ID: %d)\n", i+1, name, user.TG)
+	}
+
+	if len(users) == 0 {
+		text += "_暂无用户_"
+	}
+
+	return editOrReply(c, text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
+}
+
+// handleUsersInvite 邀请相关
+func handleUsersInvite(c tele.Context, parts []string) error {
+	c.Respond(&tele.CallbackResponse{Text: "📋 查看邀请信息..."})
+	// 显示用户邀请信息
+	return c.Send("📋 邀请功能开发中...")
+}
+
+// handleDeleteCodes 删除注册码
+func handleDeleteCodes(c tele.Context, parts []string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "🗑️ 删除注册码..."})
+
+	// 获取管理员创建的未使用注册码
+	codeRepo := repository.NewCodeRepository()
+	deleted, err := codeRepo.DeleteUnusedByCreator(c.Sender().ID)
+	if err != nil {
+		return c.Send("❌ 删除失败: " + err.Error())
+	}
+
+	return c.Send(fmt.Sprintf("✅ 已删除 %d 个未使用的注册码", deleted))
+}
+
+// handleChAdminLink 查看管理员注册码
+func handleChAdminLink(c tele.Context, parts []string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+	c.Respond(&tele.CallbackResponse{Text: "📋 获取注册码..."})
+
+	var adminID int64 = c.Sender().ID
+	if len(parts) >= 2 {
+		if id, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+			adminID = id
+		}
+	}
+
+	codeRepo := repository.NewCodeRepository()
+	codes, err := codeRepo.GetByCreator(adminID)
+	if err != nil {
+		return c.Send("❌ 获取注册码失败")
+	}
+
+	text := fmt.Sprintf("📋 **管理员 %d 的注册码**\n\n", adminID)
+
+	usedCount := 0
+	for i, code := range codes {
+		if i >= 20 {
+			text += fmt.Sprintf("\n_...还有 %d 个注册码_", len(codes)-20)
+			break
+		}
+		status := "✅"
+		if code.Used != nil && *code.Used {
+			status = "❌"
+			usedCount++
+		}
+		text += fmt.Sprintf("%s `%s` (%d天)\n", status, code.Code, code.Us)
+	}
+
+	text += fmt.Sprintf("\n📊 统计: 总数 %d / 已用 %d / 可用 %d", len(codes), usedCount, len(codes)-usedCount)
+
+	return editOrReply(c, text, keyboards.BackKeyboard("admin_panel"), tele.ModeMarkdown)
+}
+

@@ -257,6 +257,15 @@ func (r *EmbyRepository) ListWithPagination(page, pageSize int, filter string) (
 	return embies, total, err
 }
 
+// GetTopPlayUsers 获取播放排行榜用户
+func (r *EmbyRepository) GetTopPlayUsers(limit int) ([]models.Emby, error) {
+	var embies []models.Emby
+	// 按最近活跃时间排序（模拟播放排行）
+	err := r.db.Where("embyid IS NOT NULL AND embyid != '' AND lv != ?", models.LevelE).
+		Order("ch DESC NULLS LAST").Limit(limit).Find(&embies).Error
+	return embies, err
+}
+
 // GetWhitelistUsers 获取白名单用户（分页）
 func (r *EmbyRepository) GetWhitelistUsers(page, pageSize int) ([]models.Emby, int64, error) {
 	var embies []models.Emby
