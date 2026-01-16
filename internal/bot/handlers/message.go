@@ -63,6 +63,25 @@ func OnText(c tele.Context) error {
 		return nil
 	case session.StateWaitingInviteInfo:
 		return handleInviteInfoInput(c, text)
+	// 管理面板状态处理
+	case session.StateWaitingOpenTiming:
+		return handleOpenTimingInput(c, text)
+	case session.StateWaitingOpenDays:
+		return handleOpenDaysInput(c, text)
+	case session.StateWaitingUserLimit:
+		return handleUserLimitInput(c, text)
+	case session.StateWaitingCodeCreate:
+		return handleCodeCreateInput(c, text)
+	case session.StateWaitingGiftDays:
+		return handleGiftDaysInput(c, text)
+	case session.StateWaitingActivityDays:
+		return handleActivityDaysInput(c, text)
+	case session.StateWaitingFreezeDays:
+		return handleFreezeDaysInput(c, text)
+	case session.StateWaitingLine:
+		return handleLineInput(c, text)
+	case session.StateWaitingWhitelistLine:
+		return handleWhitelistLineInput(c, text)
 	default:
 		// 没有特殊状态，忽略消息
 		return nil

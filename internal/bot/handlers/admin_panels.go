@@ -4,6 +4,7 @@ package handlers
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	tele "gopkg.in/telebot.v3"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/smysle/sakura-embyboss-go/internal/config"
 	"github.com/smysle/sakura-embyboss-go/internal/database/models"
 	"github.com/smysle/sakura-embyboss-go/internal/database/repository"
+	"github.com/smysle/sakura-embyboss-go/internal/service"
 	"github.com/smysle/sakura-embyboss-go/pkg/logger"
 )
 
@@ -557,4 +559,208 @@ func getStatusText(enabled bool) string {
 		return "✅ 开启"
 	}
 	return "❌ 关闭"
+}
+
+// ==================== 输入处理函数 ====================
+
+// handleOpenTimingInput 处理定时注册输入
+func handleOpenTimingInput(c tele.Context, text string) error {
+	cfg := config.Get()
+	session.Clear(c.Sender().ID)
+
+	if text == "0" {
+		// 取消定时注册
+		cfg.Open.Timing = 0
+		if err := config.Save(); err != nil {
+			return c.Send("❌ 保存配置失败")
+		}
+		return c.Send("✅ 已取消定时注册")
+	}
+
+	// 解析参数：时长 人数
+	parts := strings.Fields(text)
+	if len(parts) < 2 {
+		return c.Send("❌ 格式错误\n\n请输入：`时长(分钟) 人数`", tele.ModeMarkdown)
+	}
+
+	minutes, err := strconv.Atoi(parts[0])
+	if err != nil || minutes <= 0 {
+		return c.Send("❌ 时长必须是正整数")
+	}
+
+	limit, err := strconv.Atoi(parts[1])
+	if err != nil || limit <= 0 {
+		return c.Send("❌ 人数必须是正整数")
+	}
+
+	cfg.Open.Timing = minutes
+	cfg.Open.MaxUsers = limit
+	cfg.Open.Status = true
+
+	if err := config.Save(); err != nil {
+		return c.Send("❌ 保存配置失败")
+	}
+
+	return c.Send(fmt.Sprintf("✅ 定时注册已设置\n\n开放时长：%d 分钟\n人数限制：%d 人", minutes, limit))
+}
+
+// handleOpenDaysInput 处理注册天数输入
+func handleOpenDaysInput(c tele.Context, text string) error {
+	cfg := config.Get()
+	session.Clear(c.Sender().ID)
+
+	days, err := strconv.Atoi(text)
+	if err != nil || days <= 0 {
+		return c.Send("❌ 请输入有效的正整数天数")
+	}
+
+	cfg.Open.Temp = days
+	if err := config.Save(); err != nil {
+		return c.Send("❌ 保存配置失败")
+	}
+
+	return c.Send(fmt.Sprintf("✅ 注册天数已设置为 %d 天", days))
+}
+
+// handleUserLimitInput 处理用户限制输入
+func handleUserLimitInput(c tele.Context, text string) error {
+	cfg := config.Get()
+	session.Clear(c.Sender().ID)
+
+	limit, err := strconv.Atoi(text)
+	if err != nil || limit < 0 {
+		return c.Send("❌ 请输入有效的非负整数")
+	}
+
+	cfg.Open.MaxUsers = limit
+	if err := config.Save(); err != nil {
+		return c.Send("❌ 保存配置失败")
+	}
+
+	if limit == 0 {
+		return c.Send("✅ 已取消注册人数限制")
+	}
+	return c.Send(fmt.Sprintf("✅ 注册人数限制已设置为 %d 人", limit))
+}
+
+// handleCodeCreateInput 处理注册码创建输入
+func handleCodeCreateInput(c tele.Context, text string) error {
+	session.Clear(c.Sender().ID)
+
+	if text == "取消" {
+		return c.Send("✅ 已取消操作")
+	}
+
+	// 解析参数：天数 数量
+	parts := strings.Fields(text)
+	if len(parts) < 2 {
+		return c.Send("❌ 格式错误\n\n请输入：`天数 数量`", tele.ModeMarkdown)
+	}
+
+	days, err := strconv.Atoi(parts[0])
+	if err != nil || days <= 0 {
+		return c.Send("❌ 天数必须是正整数")
+	}
+
+	count, err := strconv.Atoi(parts[1])
+	if err != nil || count <= 0 || count > 100 {
+		return c.Send("❌ 数量必须是 1-100 的正整数")
+	}
+
+	// 生成注册码
+	codeSvc := service.NewCodeService()
+	codes, err := codeSvc.GenerateCodes(c.Sender().ID, days, count)
+	if err != nil {
+		return c.Send(fmt.Sprintf("❌ 生成注册码失败: %s", err.Error()))
+	}
+
+	// 构建回复
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("🎟️ **生成 %d 个注册码成功**\n\n", count))
+	sb.WriteString(fmt.Sprintf("有效期：%d 天\n\n", days))
+	for i, code := range codes {
+		sb.WriteString(fmt.Sprintf("%d. `%s`\n", i+1, code))
+	}
+
+	return c.Send(sb.String(), tele.ModeMarkdown)
+}
+
+// handleGiftDaysInput 处理赠送天数输入
+func handleGiftDaysInput(c tele.Context, text string) error {
+	cfg := config.Get()
+	session.Clear(c.Sender().ID)
+
+	days, err := strconv.Atoi(text)
+	if err != nil || days <= 0 {
+		return c.Send("❌ 请输入有效的正整数天数")
+	}
+
+	cfg.KKGiftDays = days
+	if err := config.Save(); err != nil {
+		return c.Send("❌ 保存配置失败")
+	}
+
+	return c.Send(fmt.Sprintf("✅ 赠送资格天数已设置为 %d 天", days))
+}
+
+// handleActivityDaysInput 处理活跃检测天数输入
+func handleActivityDaysInput(c tele.Context, text string) error {
+	cfg := config.Get()
+	session.Clear(c.Sender().ID)
+
+	days, err := strconv.Atoi(text)
+	if err != nil || days <= 0 {
+		return c.Send("❌ 请输入有效的正整数天数")
+	}
+
+	cfg.ActivityCheckDays = days
+	if err := config.Save(); err != nil {
+		return c.Send("❌ 保存配置失败")
+	}
+
+	return c.Send(fmt.Sprintf("✅ 活跃检测天数已设置为 %d 天", days))
+}
+
+// handleFreezeDaysInput 处理封存天数输入
+func handleFreezeDaysInput(c tele.Context, text string) error {
+	cfg := config.Get()
+	session.Clear(c.Sender().ID)
+
+	days, err := strconv.Atoi(text)
+	if err != nil || days <= 0 {
+		return c.Send("❌ 请输入有效的正整数天数")
+	}
+
+	cfg.FreezeDays = days
+	if err := config.Save(); err != nil {
+		return c.Send("❌ 保存配置失败")
+	}
+
+	return c.Send(fmt.Sprintf("✅ 封存账号天数已设置为 %d 天", days))
+}
+
+// handleLineInput 处理线路输入
+func handleLineInput(c tele.Context, text string) error {
+	cfg := config.Get()
+	session.Clear(c.Sender().ID)
+
+	cfg.Emby.Line = text
+	if err := config.Save(); err != nil {
+		return c.Send("❌ 保存配置失败")
+	}
+
+	return c.Send("✅ 普通用户线路已更新")
+}
+
+// handleWhitelistLineInput 处理白名单线路输入
+func handleWhitelistLineInput(c tele.Context, text string) error {
+	cfg := config.Get()
+	session.Clear(c.Sender().ID)
+
+	cfg.Emby.WhitelistLine = &text
+	if err := config.Save(); err != nil {
+		return c.Send("❌ 保存配置失败")
+	}
+
+	return c.Send("✅ 白名单用户线路已更新")
 }
