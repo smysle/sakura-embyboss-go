@@ -308,3 +308,20 @@ func (m *Manager) cleanup() {
 		m.mu.Unlock()
 	}
 }
+
+// 包级别便捷函数
+
+// Set 设置用户状态和数据（包级别便捷函数）
+func Set(userID int64, state State, data map[string]interface{}) {
+	GetManager().SetStateWithData(userID, state, data)
+}
+
+// Get 获取用户会话（包级别便捷函数）
+func Get(userID int64) *UserSession {
+	return GetManager().GetSession(userID)
+}
+
+// Clear 清除用户会话（包级别便捷函数）
+func Clear(userID int64) {
+	GetManager().ClearSession(userID)
+}

@@ -306,6 +306,11 @@ func Update(updateFn func(*Config)) error {
 	return nil
 }
 
+// Save 保存当前配置到文件（SaveConfig 的别名）
+func Save() error {
+	return SaveConfig()
+}
+
 // SaveConfig 保存当前配置到文件
 func SaveConfig() error {
 	if configPath == "" {
