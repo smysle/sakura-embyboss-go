@@ -341,3 +341,21 @@ func EmbyLibraryKeyboard(libs map[string]string, enabledMap map[string]bool, ena
 	return markup
 }
 
+// ChangeTGApproveKeyboard 换绑TG审核键盘
+func ChangeTGApproveKeyboard(newTG, oldTG int64) *tele.ReplyMarkup {
+	markup := &tele.ReplyMarkup{}
+
+	markup.Inline(
+		markup.Row(
+			markup.Data("✅ 同意换绑", fmt.Sprintf("changetg_%d_%d", newTG, oldTG)),
+			markup.Data("❌ 拒绝", fmt.Sprintf("nochangetg_%d_%d", newTG, oldTG)),
+		),
+	)
+	return markup
+}
+
+// BackToMemberKeyboard 返回用户面板键盘
+func BackToMemberKeyboard() *tele.ReplyMarkup {
+	return BackKeyboard("members")
+}
+

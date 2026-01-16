@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	tele "gopkg.in/telebot.v3"
 
@@ -161,9 +162,18 @@ func OnCallback(c tele.Context) error {
 		return c.Respond(&tele.CallbackResponse{Text: "无效操作"})
 	case "server":
 		return handleServerInfo(c)
+	case "changetg":
+		return handleChangeTG(c)
+	case "bindtg":
+		return handleBindTG(c)
 	case "noop":
 		return c.Respond()
 	default:
+		// 检查是否是 changetg_xxx_xxx 格式（管理员审核）
+		if strings.HasPrefix(data, "changetg_") || strings.HasPrefix(data, "nochangetg_") {
+			underscoreParts := strings.Split(data, "_")
+			return handleChangeTGApprove(c, underscoreParts[0], underscoreParts)
+		}
 		logger.Debug().Str("data", data).Msg("未知回调")
 		return c.Respond(&tele.CallbackResponse{Text: "未知操作"})
 	}
@@ -349,19 +359,19 @@ func handleResetPwd(c tele.Context) error {
 		})
 	}
 
-	c.Respond(&tele.CallbackResponse{Text: "⏳ 正在重置密码..."})
+	c.Respond(&tele.CallbackResponse{Text: "🔴 请先进行安全码验证"})
 
-	client := emby.GetClient()
-	if err := client.ResetPassword(*user.EmbyID); err != nil {
-		return editOrReply(c, "❌ 重置密码失败")
-	}
+	// 设置会话状态为等待安全码验证
+	sessionMgr := session.GetManager()
+	sessionMgr.SetStateWithAction(c.Sender().ID, session.StateWaitingSecurityCode, session.ActionResetPwd)
 
-	// 更新数据库
-	repo.UpdateFields(c.Sender().ID, map[string]interface{}{"pwd": nil})
-
-	return editOrReply(c, 
-		"✅ 密码已重置为空\n\n您可以登录后自行设置新密码",
-		keyboards.BackKeyboard("back_start"),
+	return editOrReply(c,
+		"**🔰账户安全验证**：\n\n"+
+			"👮🏻 验证是否本人进行敏感操作，请对我发送您设置的安全码。\n"+
+			"倒计时 120s\n\n"+
+			"🛑 **停止请点 /cancel**",
+		keyboards.BackKeyboard("members"),
+		tele.ModeMarkdown,
 	)
 }
 
@@ -613,4 +623,191 @@ func handleOwnerBackup(c tele.Context) error {
 func handleDevices(c tele.Context) error {
 	c.Respond(&tele.CallbackResponse{Text: "📱 获取设备列表..."})
 	return editOrReply(c, "📱 **设备管理**\n\n🚧 功能开发中...", keyboards.BackKeyboard("account_info"), tele.ModeMarkdown)
+}
+
+// handleChangeTG 换绑TG入口
+func handleChangeTG(c tele.Context) error {
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(c.Sender().ID)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "⚠️ 数据库没有你", ShowAlert: true})
+	}
+
+	if user.HasEmbyAccount() {
+		return c.Respond(&tele.CallbackResponse{Text: "⚖️ 您已经拥有账户", ShowAlert: true})
+	}
+
+	c.Respond(&tele.CallbackResponse{Text: "⚖️ 更换绑定的TG"})
+
+	// 设置会话状态
+	sessionMgr := session.GetManager()
+	sessionMgr.SetState(c.Sender().ID, session.StateWaitingChangeTGInfo)
+
+	return editOrReply(c,
+		"🔰 **【更换绑定emby的tg】**\n\n"+
+			"须知：\n"+
+			"- **请确保您之前用其他tg账户注册过**\n"+
+			"- **请确保您注册的其他tg账户呈已注销状态**\n"+
+			"- **请确保输入正确的emby用户名，安全码/密码**\n\n"+
+			"请输入 `[emby用户名] [安全码/密码]`\n"+
+			"例如 `sakura 5210`\n\n"+
+			"_发送 /cancel 取消操作_",
+		keyboards.BackKeyboard("members"),
+		tele.ModeMarkdown,
+	)
+}
+
+// handleBindTG 绑定TG入口
+func handleBindTG(c tele.Context) error {
+	repo := repository.NewEmbyRepository()
+	user, err := repo.GetByTG(c.Sender().ID)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "⚠️ 数据库没有你", ShowAlert: true})
+	}
+
+	if user.HasEmbyAccount() {
+		return c.Respond(&tele.CallbackResponse{Text: "⚖️ 您已经拥有账户", ShowAlert: true})
+	}
+
+	c.Respond(&tele.CallbackResponse{Text: "⚖️ 将账户绑定TG"})
+
+	// 设置会话状态
+	sessionMgr := session.GetManager()
+	sessionMgr.SetState(c.Sender().ID, session.StateWaitingBindTGInfo)
+
+	return editOrReply(c,
+		"🔰 **【已有emby绑定至tg】**\n\n"+
+			"须知：\n"+
+			"- **请确保您需绑定的账户不在bot中**\n"+
+			"- **请确保您不是恶意绑定他人的账户**\n"+
+			"- **请确保输入正确的emby用户名，密码**\n\n"+
+			"请输入 `[emby用户名] [密码]`\n"+
+			"例如 `sakura 5210`，若密码为空请填写 `None`\n\n"+
+			"_发送 /cancel 取消操作_",
+		keyboards.BackKeyboard("members"),
+		tele.ModeMarkdown,
+	)
+}
+
+// handleChangeTGApprove 管理员审核换绑TG
+func handleChangeTGApprove(c tele.Context, action string, parts []string) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "❌ 您没有权限", ShowAlert: true})
+	}
+
+	if len(parts) < 3 {
+		return c.Respond(&tele.CallbackResponse{Text: "参数错误"})
+	}
+
+	newTG, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "无效的用户ID"})
+	}
+
+	oldTG, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{Text: "无效的原用户ID"})
+	}
+
+	repo := repository.NewEmbyRepository()
+
+	if action == "nochangetg" {
+		// 拒绝换绑
+		c.Edit(fmt.Sprintf(
+			"❎ 好的，[您](tg://user?id=%d) 已拒绝 [%d](tg://user?id=%d) 的换绑请求，原TG：`%d`",
+			c.Sender().ID, newTG, newTG, oldTG,
+		), tele.ModeMarkdown)
+
+		// 通知用户
+		userChat := &tele.Chat{ID: newTG}
+		c.Bot().Send(userChat, "❌ 您的换绑请求已被拒绝。请在群组中详细说明情况。")
+		return nil
+	}
+
+	// 同意换绑
+	oldUser, err := repo.GetByTG(oldTG)
+	if err != nil || oldUser == nil || !oldUser.HasEmbyAccount() {
+		return c.Respond(&tele.CallbackResponse{Text: "原账户不存在", ShowAlert: true})
+	}
+
+	// 清空原账户信息
+	if err := repo.UpdateFields(oldTG, map[string]interface{}{
+		"embyid": nil,
+		"name":   nil,
+		"pwd":    nil,
+		"pwd2":   nil,
+		"lv":     "d",
+		"cr":     nil,
+		"ex":     nil,
+		"us":     0,
+		"iv":     0,
+	}); err != nil {
+		logger.Error().Err(err).Int64("oldTG", oldTG).Msg("清空原账户失败")
+		return c.Respond(&tele.CallbackResponse{Text: "处理失败", ShowAlert: true})
+	}
+
+	// 将账户转移到新TG
+	if err := repo.UpdateFields(newTG, map[string]interface{}{
+		"embyid": oldUser.EmbyID,
+		"name":   oldUser.Name,
+		"pwd":    oldUser.Pwd,
+		"pwd2":   oldUser.Pwd2,
+		"lv":     oldUser.Lv,
+		"cr":     oldUser.Cr,
+		"ex":     oldUser.Ex,
+		"iv":     oldUser.Iv,
+	}); err != nil {
+		logger.Error().Err(err).Int64("newTG", newTG).Msg("转移账户失败")
+		return c.Respond(&tele.CallbackResponse{Text: "转移失败", ShowAlert: true})
+	}
+
+	c.Edit(fmt.Sprintf(
+		"✅ 好的，[您](tg://user?id=%d) 已通过 [%d](tg://user?id=%d) 的换绑请求，原TG：`%d`",
+		c.Sender().ID, newTG, newTG, oldTG,
+	), tele.ModeMarkdown)
+
+	// 通知用户
+	cfg = config.Get()
+	text := fmt.Sprintf(
+		"⭕ 请接收您的信息！\n\n"+
+			"· 用户名称 | `%s`\n"+
+			"· 用户密码 | `%s`\n"+
+			"· 安全密码 | `%s`（仅发送一次）\n"+
+			"· 到期时间 | `%s`\n\n"+
+			"· 当前线路：\n%s\n\n"+
+			"**·在【服务器】按钮 - 查看线路和密码**",
+		getEmbyName(oldUser.Name),
+		getPassword(oldUser.Pwd),
+		getSecurityCode(oldUser.Pwd2),
+		formatExpiryTime(oldUser.Ex),
+		cfg.Emby.Line,
+	)
+
+	userChat := &tele.Chat{ID: newTG}
+	c.Bot().Send(userChat, text, tele.ModeMarkdown)
+
+	logger.Info().
+		Int64("newTG", newTG).
+		Int64("oldTG", oldTG).
+		Str("name", getEmbyName(oldUser.Name)).
+		Msg("管理员批准换绑TG")
+
+	return nil
+}
+
+// getSecurityCode 获取安全码
+func getSecurityCode(pwd2 *string) string {
+	if pwd2 == nil || *pwd2 == "" {
+		return "(未设置)"
+	}
+	return *pwd2
+}
+
+// formatExpiryTime 格式化过期时间
+func formatExpiryTime(ex *time.Time) string {
+	if ex == nil {
+		return "永久"
+	}
+	return ex.Format("2006-01-02 15:04:05")
 }

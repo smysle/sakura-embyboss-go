@@ -257,3 +257,74 @@ func (s *CodeService) DeleteUnusedCodes(days []int, tgID *int64) (int64, error) 
 	}
 	return s.codeRepo.DeleteUnusedByDays(days, tgID)
 }
+
+// UseCodeWithSecurity 使用注册码（带安全码）
+func (s *CodeService) UseCodeWithSecurity(tgID int64, username string, codeStr string, securityCode string) (*UseCodeResult, error) {
+	// 检查兑换功能是否开启
+	if !s.cfg.Open.Exchange {
+		return nil, ErrExchangeDisabled
+	}
+
+	// 检查用户是否已有账户
+	user, err := s.embyRepo.GetByTG(tgID)
+	if err == nil && user.HasEmbyAccount() {
+		return nil, ErrAlreadyHasAccount
+	}
+
+	// 查找注册码
+	code, err := s.codeRepo.GetByCode(codeStr)
+	if err != nil {
+		return nil, ErrCodeNotFound
+	}
+
+	// 检查注册码是否已使用
+	if code.IsUsed() {
+		return nil, ErrCodeAlreadyUsed
+	}
+
+	// 创建 Emby 账户
+	embyClient := emby.GetClient()
+	createResult, err := embyClient.CreateUser(username, code.Us)
+	if err != nil {
+		logger.Error().Err(err).Int64("tg", tgID).Str("code", codeStr).Msg("使用注册码创建账户失败")
+		return nil, fmt.Errorf("创建账户失败: %w", err)
+	}
+
+	// 标记注册码已使用
+	if err := s.codeRepo.MarkUsed(codeStr, tgID); err != nil {
+		logger.Error().Err(err).Str("code", codeStr).Msg("标记注册码失败")
+	}
+
+	// 更新用户数据库记录（包含安全码）
+	updates := map[string]interface{}{
+		"embyid": createResult.UserID,
+		"name":   username,
+		"pwd":    createResult.Password,
+		"pwd2":   securityCode, // 安全码
+		"ex":     createResult.ExpiryDate,
+		"cr":     time.Now(),
+		"lv":     "b", // 普通用户
+	}
+
+	// 确保用户存在
+	s.embyRepo.EnsureExists(tgID)
+	if err := s.embyRepo.UpdateFields(tgID, updates); err != nil {
+		logger.Error().Err(err).Int64("tg", tgID).Msg("更新用户记录失败")
+	}
+
+	logger.Info().
+		Int64("tg", tgID).
+		Str("code", codeStr).
+		Str("embyID", createResult.UserID).
+		Str("username", username).
+		Msg("用户使用注册码成功（带安全码）")
+
+	return &UseCodeResult{
+		Success:    true,
+		UserID:     createResult.UserID,
+		Username:   username,
+		Password:   createResult.Password,
+		ExpiryDate: createResult.ExpiryDate,
+		Days:       code.Us,
+	}, nil
+}

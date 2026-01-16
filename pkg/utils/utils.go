@@ -130,3 +130,31 @@ func IsExpired(expiryTime time.Time) bool {
 func AddDays(t time.Time, days int) time.Time {
 	return t.AddDate(0, 0, days)
 }
+
+// GenerateNumericCode 生成指定长度的数字码
+func GenerateNumericCode(length int) (string, error) {
+	const digits = "0123456789"
+	result := make([]byte, length)
+	for i := range result {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
+		if err != nil {
+			return "", err
+		}
+		result[i] = digits[num.Int64()]
+	}
+	return string(result), nil
+}
+
+// GenerateRegistrationCode 生成注册码（格式：PREFIX-XXXXXXXXXXXX）
+func GenerateRegistrationCode(prefix string) (string, error) {
+	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, 12)
+	for i := range result {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		if err != nil {
+			return "", err
+		}
+		result[i] = chars[num.Int64()]
+	}
+	return prefix + "-" + string(result), nil
+}

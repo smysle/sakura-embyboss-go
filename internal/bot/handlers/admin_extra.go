@@ -471,3 +471,197 @@ func CoinsClear(c tele.Context) error {
 		successCount,
 	), tele.ModeMarkdown)
 }
+
+// Deleted 清理死号（已注销的TG账号） /deleted
+func Deleted(c tele.Context) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Reply("❌ 您没有权限使用此命令")
+	}
+
+	c.Reply("⏳ 正在清理死号，请稍候...")
+
+	repo := repository.NewEmbyRepository()
+	client := emby.GetClient()
+
+	// 获取所有有Emby账户的用户
+	users, err := repo.GetActiveUsers()
+	if err != nil {
+		return c.Reply("❌ 获取用户列表失败")
+	}
+
+	var deletedCount, cleanedCount int
+	var deletedNames []string
+
+	for _, user := range users {
+		if user.EmbyID == nil || *user.EmbyID == "" {
+			continue
+		}
+
+		// 检查用户在Emby中是否存在
+		embyUser, err := client.GetUser(*user.EmbyID)
+		if err != nil || embyUser == nil {
+			// Emby中不存在，清理数据库记录
+			if err := repo.UpdateFields(user.TG, map[string]interface{}{
+				"embyid": nil,
+				"name":   nil,
+				"pwd":    nil,
+				"pwd2":   nil,
+				"lv":     models.LevelD,
+			}); err != nil {
+				logger.Error().Err(err).Int64("tg", user.TG).Msg("清理死号失败")
+			} else {
+				cleanedCount++
+				if user.Name != nil {
+					deletedNames = append(deletedNames, *user.Name)
+				}
+			}
+			continue
+		}
+
+		// 检查用户是否被禁用（可能是已删除/注销）
+		if embyUser.Policy != nil && embyUser.Policy.IsDisabled {
+			// 删除Emby用户
+			if err := client.DeleteUser(*user.EmbyID); err != nil {
+				logger.Error().Err(err).Str("embyID", *user.EmbyID).Msg("删除死号Emby账户失败")
+			} else {
+				deletedCount++
+				if user.Name != nil {
+					deletedNames = append(deletedNames, *user.Name)
+				}
+			}
+
+			// 清理数据库记录
+			if err := repo.UpdateFields(user.TG, map[string]interface{}{
+				"embyid": nil,
+				"name":   nil,
+				"pwd":    nil,
+				"pwd2":   nil,
+				"lv":     models.LevelD,
+			}); err != nil {
+				logger.Error().Err(err).Int64("tg", user.TG).Msg("清理死号数据库记录失败")
+			}
+		}
+	}
+
+	logger.Info().
+		Int("deleted", deletedCount).
+		Int("cleaned", cleanedCount).
+		Int64("admin", c.Sender().ID).
+		Msg("管理员执行清理死号")
+
+	text := fmt.Sprintf(
+		"✅ **死号清理完成**\n\n"+
+			"🗑 删除Emby账户: %d\n"+
+			"🧹 清理数据库记录: %d",
+		deletedCount,
+		cleanedCount,
+	)
+
+	if len(deletedNames) > 0 && len(deletedNames) <= 10 {
+		text += "\n\n清理的用户:\n"
+		for _, name := range deletedNames {
+			text += fmt.Sprintf("• `%s`\n", name)
+		}
+	} else if len(deletedNames) > 10 {
+		text += fmt.Sprintf("\n\n共清理 %d 个用户", len(deletedNames))
+	}
+
+	return c.Reply(text, tele.ModeMarkdown)
+}
+
+// LowActivity 手动运行活跃检测 /low_activity
+func LowActivity(c tele.Context) error {
+	cfg := config.Get()
+	if !cfg.IsAdmin(c.Sender().ID) {
+		return c.Reply("❌ 您没有权限使用此命令")
+	}
+
+	if !cfg.Open.LowActivity {
+		return c.Reply("⚠️ 活跃检测功能已关闭\n\n请在配置文件中启用 `open.low_activity`", tele.ModeMarkdown)
+	}
+
+	c.Reply("⏳ 正在执行活跃检测，请稍候...")
+
+	// 获取不活跃用户列表
+	repo := repository.NewEmbyRepository()
+	client := emby.GetClient()
+
+	// 检测不活跃天数
+	inactiveDays := cfg.Open.InactiveDays
+	if inactiveDays <= 0 {
+		inactiveDays = 30
+	}
+
+	users, err := repo.GetInactiveUsers(inactiveDays)
+	if err != nil {
+		return c.Reply("❌ 获取用户列表失败")
+	}
+
+	var inactiveCount, bannedCount int
+	var inactiveNames []string
+
+	for _, user := range users {
+		if user.EmbyID == nil || *user.EmbyID == "" {
+			continue
+		}
+
+		// 检查最后活跃时间
+		embyUser, err := client.GetUser(*user.EmbyID)
+		if err != nil || embyUser == nil {
+			continue
+		}
+
+		// 如果超过不活跃天数，禁用账户
+		var lastActivity time.Time
+		if embyUser.LastActivityDate != nil {
+			lastActivity = *embyUser.LastActivityDate
+		} else if user.Ch != nil {
+			lastActivity = *user.Ch
+		}
+
+		daysSinceActivity := int(time.Since(lastActivity).Hours() / 24)
+		if daysSinceActivity >= inactiveDays {
+			// 禁用账户
+			if err := client.DisableUser(*user.EmbyID); err != nil {
+				logger.Error().Err(err).Str("embyID", *user.EmbyID).Msg("禁用不活跃用户失败")
+			} else {
+				bannedCount++
+				if user.Name != nil {
+					inactiveNames = append(inactiveNames, fmt.Sprintf("%s (%d天)", *user.Name, daysSinceActivity))
+				}
+
+				// 更新用户等级为封禁
+				repo.UpdateFields(user.TG, map[string]interface{}{"lv": models.LevelE})
+			}
+			inactiveCount++
+		}
+	}
+
+	logger.Info().
+		Int("inactive", inactiveCount).
+		Int("banned", bannedCount).
+		Int64("admin", c.Sender().ID).
+		Msg("管理员执行活跃检测")
+
+	text := fmt.Sprintf(
+		"✅ **活跃检测完成**\n\n"+
+			"📊 检测天数: %d 天\n"+
+			"👤 不活跃用户: %d\n"+
+			"🚫 已禁用账户: %d",
+		inactiveDays,
+		inactiveCount,
+		bannedCount,
+	)
+
+	if len(inactiveNames) > 0 && len(inactiveNames) <= 10 {
+		text += "\n\n不活跃用户:\n"
+		for _, name := range inactiveNames {
+			text += fmt.Sprintf("• `%s`\n", name)
+		}
+	} else if len(inactiveNames) > 10 {
+		text += fmt.Sprintf("\n\n共 %d 个不活跃用户", len(inactiveNames))
+	}
+
+	return c.Reply(text, tele.ModeMarkdown)
+}

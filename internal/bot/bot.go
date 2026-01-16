@@ -132,6 +132,8 @@ func (b *Bot) registerHandlers() {
 	adminGroup.Handle("/callall", handlers.CallAll)
 	adminGroup.Handle("/ucr", handlers.UCr)
 	adminGroup.Handle("/urm", handlers.URm)
+	adminGroup.Handle("/deleted", handlers.Deleted)
+	adminGroup.Handle("/low_activity", handlers.LowActivity)
 
 	// Owner 命令
 	ownerGroup := b.Group()
@@ -191,6 +193,8 @@ func (b *Bot) setCommands() {
 		{Text: "callall", Description: "广播消息 [管理]"},
 		{Text: "ucr", Description: "创建非TG用户 [管理]"},
 		{Text: "urm", Description: "删除指定用户 [管理]"},
+		{Text: "deleted", Description: "清理死号 [管理]"},
+		{Text: "low_activity", Description: "手动活跃检测 [管理]"},
 		{Text: "restart", Description: "重启bot [管理]"},
 	}...)
 

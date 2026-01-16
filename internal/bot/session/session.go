@@ -14,17 +14,41 @@ const (
 	StateWaitingCode State = "waiting_code" // 等待输入注册码
 	StateWaitingName State = "waiting_name" // 等待输入用户名
 
+	// 用户创建相关状态
+	StateWaitingCreateInfo State = "waiting_create_info" // 等待输入用户名和安全码
+
+	// 安全验证相关状态
+	StateWaitingSecurityCode     State = "waiting_security_code"      // 等待输入安全码验证
+	StateWaitingNewPassword      State = "waiting_new_password"       // 等待输入新密码
+	StateWaitingDeleteConfirm    State = "waiting_delete_confirm"     // 等待删除确认
+
+	// 换绑TG相关状态
+	StateWaitingChangeTGInfo State = "waiting_changetg_info" // 等待输入换绑信息
+	StateWaitingBindTGInfo   State = "waiting_bindtg_info"   // 等待输入绑定信息
+
 	// MoviePilot 点播相关状态
-	StateMoviePilotSearch    State = "moviepilot_search"     // 等待输入搜索关键词
+	StateMoviePilotSearch      State = "moviepilot_search"       // 等待输入搜索关键词
 	StateMoviePilotSelectMedia State = "moviepilot_select_media" // 等待选择媒体
-	StateMoviePilotConfirm   State = "moviepilot_confirm"    // 等待确认下载
+	StateMoviePilotConfirm     State = "moviepilot_confirm"      // 等待确认下载
+)
+
+// ActionType 操作类型（用于安全码验证后的操作）
+type ActionType string
+
+const (
+	ActionNone         ActionType = ""
+	ActionResetPwd     ActionType = "reset_pwd"     // 重置密码
+	ActionDeleteAccount ActionType = "delete_account" // 删除账户
+	ActionChangeTG     ActionType = "change_tg"     // 换绑TG
 )
 
 // UserSession 用户会话
 type UserSession struct {
-	State     State
-	Data      map[string]interface{}
-	UpdatedAt time.Time
+	State       State
+	Action      ActionType             // 当前操作类型
+	Data        map[string]interface{}
+	UpdatedAt   time.Time
+	MessageID   int                    // 记录消息ID，用于编辑
 }
 
 // Manager 会话管理器
@@ -44,7 +68,7 @@ func GetManager() *Manager {
 	once.Do(func() {
 		instance = &Manager{
 			sessions: make(map[int64]*UserSession),
-			ttl:      10 * time.Minute, // 会话超时时间
+			ttl:      5 * time.Minute, // 会话超时时间缩短到5分钟
 		}
 
 		// 启动清理协程
@@ -70,6 +94,25 @@ func (m *Manager) SetState(userID int64, state State) {
 	}
 }
 
+// SetStateWithAction 设置用户状态和操作类型
+func (m *Manager) SetStateWithAction(userID int64, state State, action ActionType) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if session, ok := m.sessions[userID]; ok {
+		session.State = state
+		session.Action = action
+		session.UpdatedAt = time.Now()
+	} else {
+		m.sessions[userID] = &UserSession{
+			State:     state,
+			Action:    action,
+			Data:      make(map[string]interface{}),
+			UpdatedAt: time.Now(),
+		}
+	}
+}
+
 // GetState 获取用户状态
 func (m *Manager) GetState(userID int64) State {
 	m.mu.RLock()
@@ -79,6 +122,28 @@ func (m *Manager) GetState(userID int64) State {
 		return session.State
 	}
 	return StateNone
+}
+
+// GetAction 获取用户当前操作类型
+func (m *Manager) GetAction(userID int64) ActionType {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if session, ok := m.sessions[userID]; ok {
+		return session.Action
+	}
+	return ActionNone
+}
+
+// GetSession 获取完整的会话信息
+func (m *Manager) GetSession(userID int64) *UserSession {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if session, ok := m.sessions[userID]; ok {
+		return session
+	}
+	return nil
 }
 
 // SetData 设置会话数据
@@ -110,6 +175,52 @@ func (m *Manager) GetData(userID int64, key string) (interface{}, bool) {
 	return nil, false
 }
 
+// GetDataString 获取字符串类型的会话数据
+func (m *Manager) GetDataString(userID int64, key string) string {
+	val, ok := m.GetData(userID, key)
+	if !ok {
+		return ""
+	}
+	if s, ok := val.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// GetDataInt 获取整数类型的会话数据
+func (m *Manager) GetDataInt(userID int64, key string) int {
+	val, ok := m.GetData(userID, key)
+	if !ok {
+		return 0
+	}
+	if i, ok := val.(int); ok {
+		return i
+	}
+	return 0
+}
+
+// SetMessageID 设置消息ID
+func (m *Manager) SetMessageID(userID int64, msgID int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if session, ok := m.sessions[userID]; ok {
+		session.MessageID = msgID
+		session.UpdatedAt = time.Now()
+	}
+}
+
+// GetMessageID 获取消息ID
+func (m *Manager) GetMessageID(userID int64) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if session, ok := m.sessions[userID]; ok {
+		return session.MessageID
+	}
+	return 0
+}
+
 // ClearSession 清除用户会话
 func (m *Manager) ClearSession(userID int64) {
 	m.mu.Lock()
@@ -117,9 +228,21 @@ func (m *Manager) ClearSession(userID int64) {
 	delete(m.sessions, userID)
 }
 
+// HasActiveSession 检查用户是否有活跃会话
+func (m *Manager) HasActiveSession(userID int64) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	session, ok := m.sessions[userID]
+	if !ok {
+		return false
+	}
+	return session.State != StateNone
+}
+
 // cleanup 定期清理过期会话
 func (m *Manager) cleanup() {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {

@@ -3,11 +3,13 @@ package handlers
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tele "gopkg.in/telebot.v3"
 
 	"github.com/smysle/sakura-embyboss-go/internal/bot/keyboards"
+	"github.com/smysle/sakura-embyboss-go/internal/bot/session"
 	"github.com/smysle/sakura-embyboss-go/internal/config"
 	"github.com/smysle/sakura-embyboss-go/internal/database/models"
 	"github.com/smysle/sakura-embyboss-go/internal/database/repository"
@@ -76,12 +78,16 @@ func handleDelMe(c tele.Context) error {
 
 	c.Respond(&tele.CallbackResponse{Text: "🔴 请先进行安全码验证"})
 
+	// 设置会话状态为等待安全码验证（删除账户操作）
+	sessionMgr := session.GetManager()
+	sessionMgr.SetStateWithAction(c.Sender().ID, session.StateWaitingSecurityCode, session.ActionDeleteAccount)
+
 	text := "**🔰账户安全验证**：\n\n" +
 		"👮🏻 验证是否本人进行敏感操作，请对我发送您设置的安全码。\n" +
 		"倒计时 60s\n" +
 		"🛑 **停止请点 /cancel**"
 
-	return editOrReply(c, text, keyboards.BackKeyboard("members"))
+	return editOrReply(c, text, keyboards.BackKeyboard("members"), tele.ModeMarkdown)
 }
 
 // handleConfirmDelMe 确认删除账户
