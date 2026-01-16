@@ -1582,8 +1582,8 @@ func handleUserKick(c tele.Context, tgIDStr string) error {
 	}
 
 	// 从群组踢出
-	groupID := cfg.Telegram.GroupID
-	if groupID != 0 {
+	if len(cfg.Groups) > 0 {
+		groupID := cfg.Groups[0]
 		member := &tele.ChatMember{
 			User: &tele.User{ID: tgID},
 		}
@@ -1649,7 +1649,7 @@ func handleMyDevices(c tele.Context) error {
 				text += fmt.Sprintf("\n_...还有 %d 个设备_", len(devices)-10)
 				break
 			}
-			text += fmt.Sprintf("• %s (%s)\n", device.Name, device.AppName)
+			text += fmt.Sprintf("• %s (%s)\n", device.DeviceName, device.AppName)
 		}
 	}
 
@@ -1793,7 +1793,7 @@ func handleChAdminLink(c tele.Context, parts []string) error {
 			break
 		}
 		status := "✅"
-		if code.Used != nil && *code.Used {
+		if code.Used != nil {
 			status = "❌"
 			usedCount++
 		}
